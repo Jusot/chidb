@@ -13,3 +13,15 @@ test-driver
 output.*
 requests
 traces.*
+Makefile
+.deps/
+.dirstamp
+libtool
+config.*
+stamp*
+.libs/
+libchi*
+libsimclist*
+chidb
+*.o
+*.lo

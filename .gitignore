@@ -25,3 +25,4 @@ libsimclist*
 chidb
 *.o
 *.lo
+check_btree_*

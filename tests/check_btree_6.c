@@ -66,4 +66,3 @@ TCase* make_btree_6_tc(void)
 
     return tc;
 }
-

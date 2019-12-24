@@ -215,4 +215,3 @@ TCase* make_btree_3_tc(void)
 
     return tc;
 }
-

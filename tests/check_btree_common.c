@@ -206,4 +206,3 @@ void test_index_bigfile(chidb *db, npage_t index_nroot)
         ck_assert(!memcmp(buf, data, datalen));
     }
 }
-

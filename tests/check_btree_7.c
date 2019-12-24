@@ -79,4 +79,3 @@ TCase* make_btree_7_tc(void)
 
     return tc;
 }
-

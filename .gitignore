@@ -1,0 +1,15 @@
+*.m4
+configure
+compile
+config.guess
+config.h.in
+config.sub
+depcomp
+install-sh
+ltmain.sh
+Makefile.in
+missing
+test-driver
+output.*
+requests
+traces.*

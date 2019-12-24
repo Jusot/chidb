@@ -25,3 +25,12 @@ libsimclist*
 chidb
 *.o
 *.lo
+.vscode/
+check_btree
+
+*.log
+*.trs
+check_dbm
+check_dbrecord
+check_pager
+check_utils

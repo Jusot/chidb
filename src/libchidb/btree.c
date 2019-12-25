@@ -55,6 +55,12 @@
 #include "pager.h"
 #include "util.h"
 
+// 文件头中的常量
+uint8_t header_between_18_23[6] = { 0x01, 0x01, 0x00, 0x40, 0x20, 0x20 },
+        header_between_32_39[8] = { 0 },
+        header_between_44_47[4] = { 0, 0, 0, 0x01 },
+        header_between_52_59[8] = { 0, 0, 0, 0, 0, 0, 0, 0x01 },
+        header_between_64_67[4] = { 0 };
 
 /* Open a B-Tree file
  *
@@ -89,9 +95,9 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         return CHIDB_ENOMEM;
     }
 
-    int status;
     // 尝试读取文件
-    if ((status = chidb_Pager_open(&pager, filename)) != CHIDB_OK)
+    int status = chidb_Pager_open(&pager, filename);
+    if (status != CHIDB_OK)
     {
         // 若失败则返回错误码
         return status;
@@ -114,7 +120,8 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         pager->n_pages = 0;
 
         // 2) 在页1中创建一个空的表页结点
-        if ((status = chidb_Btree_newNode(*bt, &pager->n_pages, PGTYPE_TABLE_LEAF)) != CHIDB_OK)
+        npage_t npage;
+        if ((status = chidb_Btree_newNode(*bt, &npage, PGTYPE_TABLE_LEAF)) != CHIDB_OK)
         {
             // 创建页结点失败则返回对应的错误码
             return status;
@@ -125,13 +132,6 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
     {
         // 文件头规定了前一百个字节
         uint8_t buf[100];
-
-        // 文件头中的常量
-        uint8_t header_between_18_23[6] = { 0x01, 0x01, 0x00, 0x40, 0x20, 0x20 },
-                header_between_32_39[8] = { 0 },
-                header_between_44_47[4] = { 0, 0, 0, 0x01 },
-                header_between_52_59[8] = { 0, 0, 0, 0, 0, 0, 0, 0x01 },
-                header_between_64_67[4] = { 0 };
 
         // 尝试读取文件头
         if ((status = chidb_Pager_readHeader(pager, buf)) != CHIDB_OK)
@@ -146,7 +146,8 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
          && !memcmp(&buf[32], header_between_32_39, 8)
          && !memcmp(&buf[44], header_between_44_47, 4)
          && !memcmp(&buf[52], header_between_52_59, 8)
-         && !memcmp(&buf[64], header_between_64_67, 4))
+         && !memcmp(&buf[64], header_between_64_67, 4)
+         && get4byte(&buf[48]) == 20000)
         {
             // 常量都正确则读取Page size并设置pager的page_size成员
             // Page size 在文件头0x12即16的位置
@@ -177,6 +178,17 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
  */
 int chidb_Btree_close(BTree *bt)
 {
+    // 尝试关闭指向的页文件
+    int status = chidb_Pager_close(bt->pager);
+    if (status != CHIDB_OK)
+    {
+        // 如果关闭失败返回CHIDB_EIO
+        return status;
+    }
+
+    // 释放bt指向的空间
+    free(bt);
+
     return CHIDB_OK;
 }
 
@@ -204,7 +216,39 @@ int chidb_Btree_close(BTree *bt)
  */
 int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
 {
-    /* Your code goes here */
+    // 尝试分配结点空间
+    if (!(*btn = malloc(sizeof(BTreeNode))))
+    {
+        // 分配失败返回错误码
+        return CHIDB_ENOMEM;
+    }
+
+    // 尝试读取npage指定页的内容到结点中页指针成员指向的内存中
+    int status = chidb_Pager_readPage(bt->pager, npage, &(*btn)->page);
+    if (status != CHIDB_OK)
+    {
+        // 读取失败返回错误码
+        return status;
+    }
+
+    // 如果读取的是第一页, 则需要加上文件头(100字节)的偏移量
+    // 否则不添加偏移量
+    uint8_t *data = (*btn)->page->data + ((npage == 1) ? 100 : 0);
+
+    // 按照格式初始化结点中的成员
+    BTreeNode *node = *btn;
+    // 第一个字节为Page type
+    node->type = *data;
+    // 字节1-2为表示可用空间开始的字节偏移量Free offset
+    node->free_offset = get2byte(data + 1);
+    // 字节3-4为此页面中存储的单元格数
+    node->n_cells = get2byte(data + 3);
+    // 字节5-5为单元格开始处的字节偏移量
+    node->cells_offset = get2byte(data + 5);
+    // 当页面类型为内部表页面或者内部索引页面时, 该值才有意义
+    node->right_page = ((node->type == 0x05) || (node->type == 0x02)) ? get4byte(data + 8) : 0;
+    // 单元格偏移数组存储在页面头之后的位置
+    node->celloffset_array = data + (((node->type == 0x05) || (node->type == 0x02)) ? 12 : 8);
 
     return CHIDB_OK;
 }
@@ -225,7 +269,16 @@ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
  */
 int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
 {
-    /* Your code goes here */
+    // 尝试释放内存中的页
+    int status = chidb_Pager_releaseMemPage(bt->pager, btn->page);
+    if (status != CHIDB_OK)
+    {
+        // 释放失败返回错误码
+        return status;
+    }
+
+    // 释放接收的B树结点所指向的空间
+    free(btn);
 
     return CHIDB_OK;
 }
@@ -249,9 +302,16 @@ int chidb_Btree_freeMemNode(BTree *bt, BTreeNode *btn)
  */
 int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type)
 {
-    /* Your code goes here */
+    // 尝试分配新页
+    int status = chidb_Pager_allocatePage(bt->pager, npage);
+    if (status == CHIDB_OK)
+    {
+        // 分配成功则初始化空结点
+        status = chidb_Btree_initEmptyNode(bt, *npage, type);
+    }
 
-    return CHIDB_OK;
+    // 返回对应的返回码
+    return status;
 }
 
 
@@ -274,9 +334,97 @@ int chidb_Btree_newNode(BTree *bt, npage_t *npage, uint8_t type)
  */
 int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
 {
-    /* Your code goes here */
+    MemPage *page;
 
-    return CHIDB_OK;
+    // 尝试读取页到内存中
+    int status = chidb_Pager_readPage(bt->pager, npage, &page);
+    if (status != CHIDB_OK)
+    {
+        // 读取失败返回错误码
+        return status;
+    }
+
+    uint8_t *pos = page->data;
+
+    // 如果是第一页, 需要写入文件头
+    if (npage == 1)
+    {
+        sprintf(pos, "SQLite format 3");
+        pos += 16;
+
+        // 写入Page size
+        put2byte(pos, bt->pager->page_size);
+        pos += 2;
+
+        // 写入字节12-23的常量
+        memcpy(pos, header_between_18_23, 6);
+        pos += 6;
+
+        // 写入文件修改次数, 初始化为0, +8是因为有4字节是未使用的
+        put4byte(pos, 0);
+        pos += 8;
+
+        // 写入字节32-39的常量
+        memcpy(pos, header_between_32_39, 8);
+        pos += 8;
+
+        // 初始化版本为0
+        put4byte(pos, 0);
+        pos += 4;
+
+        // 写入字节44-47的常量
+        memcpy(pos, header_between_44_47, 4);
+        pos += 4;
+
+        // 写入页缓存大小
+        put4byte(pos, 20000);
+        pos += 4;
+
+        // 写入字节52-59的常量
+        memcpy(pos, header_between_52_59, 8);
+        pos += 8;
+
+        // 写入User Cookie
+        put4byte(pos, 0);
+        pos += 4;
+
+        // 写入字节64-67的常量
+        put4byte(pos, 0);
+
+        pos = page->data + 100;
+    }
+
+    // 写入页头
+    // 写入页类型
+    *pos++ = type;
+
+    // 写入可用空间的偏移量
+    // 假设可用空间从头部之后的定量偏移
+    // 内部结点的定量偏移为12
+    // 非内部结点则为8
+    put2byte(pos,
+        ((type == 0x05) || (type == 0x02) ? 12 : 8)
+        + ((npage == 1) ? 100 : 0)
+    );
+    pos += 2;
+
+    // 写入单元格偏移
+    put2byte(pos, bt->pager->page_size);
+    pos += 2;
+
+    *pos++ = 0;
+
+    // 若为内部结点则写入Right page
+    if (type == 0x05 || type == 0x02)
+    {
+        put4byte(pos, 0);
+        pos += 4;
+    }
+
+    // 尝试写入操作, 并返回结果
+    // 若成功则返回CHIDB_OK
+    // 否则返回对应的错误码
+    return chidb_Pager_writePage(bt->pager, page);
 }
 
 
@@ -300,9 +448,22 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
  */
 int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
 {
-    /* Your code goes here */
+    // 若当前页为第一页则偏移为100
+    uint8_t *pos = ((btn->page->npage == 1) ? 100 : 0) + btn->page->data;
 
-    return CHIDB_OK;
+    // 按照格式写入数据
+    *pos = btn->type;
+    put2byte(pos + 1, btn->free_offset);
+    put2byte(pos + 3, btn->n_cells);
+    put2byte(pos + 5, btn->cells_offset);
+    if (btn->type == 0x05
+     || btn->type == 0x02)
+    {
+        put4byte(pos + 8, btn->right_page);
+    }
+
+    // 返回写入页的结果
+    return chidb_Pager_writePage(bt->pager, btn->page);
 }
 
 
@@ -326,7 +487,59 @@ int chidb_Btree_writeNode(BTree *bt, BTreeNode *btn)
  */
 int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
-    /* Your code goes here */
+    // 当前单元格的数据
+    uint8_t *data = btn->page->data + get2byte(btn->celloffset_array + ncell * 2);
+
+    if (ncell < 0 || ncell > btn->n_cells)
+    {
+        // ncell非法则返回错误
+        return CHIDB_ECELLNO;
+    }
+
+    // 单元格类型与结点类型相同
+    cell->type = btn->type;
+    switch (btn->type)
+    {
+    case PGTYPE_TABLE_INTERNAL:
+        // 若为内部表单元
+        // 字节0-3为ChildPage, 类型为uint32
+        // 字节4-7为Key, 类型为varint32
+        cell->fields.tableInternal.child_page = get4byte(data);
+        getVarint32(data + 4, &cell->key);
+        break;
+
+    case PGTYPE_TABLE_LEAF:
+        // 若为叶表单元格
+        // 字节0-3为DB Record size, 类型为varint32
+        // 字节4-7为Key, 类型为varint32
+        // 字节8-后为DB Record
+        getVarint32(data, &cell->fields.tableLeaf.data_size);
+        getVarint32(data + 4, &cell->key);
+        cell->fields.tableLeaf.data = data + TABLELEAFCELL_SIZE_WITHOUTDATA;
+        break;
+
+    case PGTYPE_INDEX_INTERNAL:
+        // 若为内部索引单元
+        // 字节0-3为ChildPage, 类型为uint32
+        // 字节8-11为KeyIdx, 类型为uint32
+        // 字节12-15为KeyPk, 类型为uint32
+        cell->fields.indexInternal.child_page = get4byte(data);
+        cell->key = get4byte(data + 8);
+        cell->fields.indexInternal.keyPk = get4byte(data + 12);
+        break;
+
+    case PGTYPE_INDEX_LEAF:
+        // 若为叶索引单元
+        // 字节4-7为KeyIdx, 类型为uint32
+        // 字节8-11为KeyPk, 类型为uint32
+        cell->key = get4byte(data + 4);
+        cell->fields.indexLeaf.keyPk = get4byte(data + 8);
+        break;
+
+    default:
+        fprintf(stderr, "getCell: invalid page type (%d)\n", btn->type);
+        exit(1);
+    }
 
     return CHIDB_OK;
 }
@@ -410,9 +623,15 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
  */
 int chidb_Btree_insertInTable(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t *data, uint16_t size)
 {
-    /* Your code goes here */
+    // 声明单元格结构成员后插入B树中
 
-    return CHIDB_OK;
+    BTreeCell btc;
+    btc.type = PGTYPE_TABLE_LEAF;
+    btc.key = key;
+    btc.fields.tableLeaf.data_size = size;
+    btc.fields.tableLeaf.data = data;
+
+    return chidb_Btree_insert(bt, nroot, &btc);
 }
 
 
@@ -437,9 +656,12 @@ int chidb_Btree_insertInTable(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t
  */
 int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chidb_key_t keyPk)
 {
-    /* Your code goes here */
+    BTreeCell btc;
+    btc.type = PGTYPE_INDEX_LEAF;
+    btc.key = keyIdx;
+    btc.fields.indexLeaf.keyPk = keyPk;
 
-    return CHIDB_OK;
+    return chidb_Btree_insert(bt, nroot, &btc);
 }
 
 

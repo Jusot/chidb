@@ -48,6 +48,7 @@
 #include <string.h>
 #include <strings.h>
 #include <chidb/log.h>
+#include <sys/stat.h>
 #include "chidbInt.h"
 #include "btree.h"
 #include "record.h"
@@ -79,7 +80,84 @@
  */
 int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
 {
-    /* Your code goes here */
+    Pager *pager;
+
+    // 尝试为bt分配空间
+    if (!(*bt = malloc(sizeof(Btree))))
+    {
+        // 初始化失败返回无可用内存错误
+        return CHIDB_ENOMEM;
+    }
+
+    int status;
+    // 尝试读取文件
+    if ((status = chidb_Pager_open(&pager, filename)) != CHIDB_OK)
+    {
+        // 若失败则返回错误码
+        return status;
+    }
+
+    // 将相对应的成员互相绑定
+    (*bt)->pager = pager;
+    (*bt)->db = db;
+    db->bt = *bt;
+
+    struct stat file_stat;
+    // 读取文件的信息
+    fstat(fileno(pager->f), &file_stat);
+
+    // 若文件为空
+    if (file_stat.st_size == 0)
+    {
+        // 1) 通过默认页大小初始化文件头
+        chidb_Pager_setPageSize(pager, DEFAULT_PAGE_SIZE);
+        pager->n_pages = 0;
+
+        // 2) 在页1中创建一个空的表页结点
+        if ((status = chidb_Btree_newNode(*bt, &pager->n_pages, PGTYPE_TABLE_LEAF)) != CHIDB_OK)
+        {
+            // 创建页结点失败则返回对应的错误码
+            return status;
+        }
+    }
+    // 若文件非空
+    else
+    {
+        // 文件头规定了前一百个字节
+        uint8_t buf[100];
+
+        // 文件头中的常量
+        uint8_t header_between_18_23[6] = { 0x01, 0x01, 0x00, 0x40, 0x20, 0x20 },
+                header_between_32_39[8] = { 0 },
+                header_between_44_47[4] = { 0, 0, 0, 0x01 },
+                header_between_52_59[8] = { 0, 0, 0, 0, 0, 0, 0, 0x01 },
+                header_between_64_67[4] = { 0 };
+
+        // 尝试读取文件头
+        if ((status = chidb_Pager_readHeader(pager, buf)) != CHIDB_OK)
+        {
+            // 文件头读取失败则返回相应的错误码
+            return status;
+        }
+
+        // 验证文件头中的相关常量
+        if (!memcmp(buf, "SQLite format 3", 16)
+         && !memcmp(&buf[18], header_between_18_23, 6)
+         && !memcmp(&buf[32], header_between_32_39, 8)
+         && !memcmp(&buf[44], header_between_44_47, 4)
+         && !memcmp(&buf[52], header_between_52_59, 8)
+         && !memcmp(&buf[64], header_between_64_67, 4))
+        {
+            // 常量都正确则读取Page size并设置pager的page_size成员
+            // Page size 在文件头0x12即16的位置
+            chidb_Pager_setPageSize(pager, get2byte(&buf[16]));
+        }
+        // 验证失败, 返回表示错误文件头的验证码
+        else
+        {
+            return CHIDB_ECORRUPTHEADER;
+        }
+    }
 
     return CHIDB_OK;
 }
@@ -99,8 +177,6 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
  */
 int chidb_Btree_close(BTree *bt)
 {
-    /* Your code goes here */
-
     return CHIDB_OK;
 }
 
@@ -456,4 +532,3 @@ int chidb_Btree_split(BTree *bt, npage_t npage_parent, npage_t npage_child, ncel
 
     return CHIDB_OK;
 }
-

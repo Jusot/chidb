@@ -356,7 +356,7 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
         put2byte(pos, bt->pager->page_size);
         pos += 2;
 
-        // 写入字节12-23的常量
+        // 写入字节18-23的常量
         memcpy(pos, header_between_18_23, 6);
         pos += 6;
 
@@ -396,7 +396,7 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
 
     // 写入页头
     // 写入页类型
-    *pos++ = type;
+    *(pos++) = type;
 
     // 写入可用空间的偏移量
     // 假设可用空间从头部之后的定量偏移
@@ -412,7 +412,7 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
     put2byte(pos, bt->pager->page_size);
     pos += 2;
 
-    *pos++ = 0;
+    *(pos++) = 0;
 
     // 若为内部结点则写入Right page
     if (type == 0x05 || type == 0x02)
@@ -423,8 +423,13 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
 
     // 尝试写入操作, 并返回结果
     // 若成功则返回CHIDB_OK
-    // 否则返回对应的错误码
-    return chidb_Pager_writePage(bt->pager, page);
+    if ((status = chidb_Pager_writePage(bt->pager, page)) == CHIDB_OK)
+    {
+        chidb_Pager_releaseMemPage(bt->pager, page);
+    }
+
+    // 返回对应的错误码
+    return status;
 }
 
 

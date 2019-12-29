@@ -349,7 +349,7 @@ int chidb_Btree_initEmptyNode(BTree *bt, npage_t npage, uint8_t type)
     // 如果是第一页, 需要写入文件头
     if (npage == 1)
     {
-        sprintf(pos, "SQLite format 3");
+        sprintf((char *)pos, "SQLite format 3");
         pos += 16;
 
         // 写入Page size
@@ -575,8 +575,86 @@ int chidb_Btree_getCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  */
 int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
 {
-    /* Your code goes here */
+    // 将cell插入到ncell在btn中指定的位置中
 
+    uint8_t *data = btn->page->data;
+    uint8_t *cell_pointer = NULL;
+    uint8_t const_bytes[] = { 0x0B, 0x03, 0x04, 0x04 };
+
+    // 如果ncell小于零或者大于btn指向的结点中的单元个数
+    if(ncell < 0 || ncell > btn->n_cells)
+    {
+        // 返回错误码
+        return CHIDB_ECELLNO;
+    }
+
+    switch(btn->type)
+    {
+        case PGTYPE_TABLE_LEAF:
+            // 按照叶表单元格的格式存储, 从free space中得到其存储空间的起始地址
+            // cells向下增长
+            cell_pointer = data + btn->cells_offset - cell->fields.tableLeaf.data_size - TABLELEAFCELL_SIZE_WITHOUTDATA;
+            // 字节0-3存储DB Record Size字段的值
+            putVarint32(cell_pointer, cell->fields.tableLeaf.data_size);
+            // 字节4-7存储Key字段
+            putVarint32(cell_pointer + 4, cell->key);
+            // 字节8-存储单元格的数据
+            memcpy(cell_pointer + 8, cell->fields.tableLeaf.data, cell->fields.tableLeaf.data_size);
+            // 更新btn的单元格偏移量
+            btn->cells_offset -= (cell->fields.tableLeaf.data_size + TABLELEAFCELL_SIZE_WITHOUTDATA);
+            break;
+
+        case PGTYPE_TABLE_INTERNAL:
+            // 按照内部表格单元的格式存储, 从free space中得到其存储空间的起始地址
+            cell_pointer = data + btn->cells_offset - TABLEINTCELL_SIZE;
+            // 字节0-3存储Child Page字段
+            put4byte(cell_pointer, cell->fields.tableInternal.child_page);
+            // 字节4-7存储Key字段
+            putVarint32(cell_pointer + 4, cell->key);
+            // 更新btn的单元格偏移量
+            btn->cells_offset -= TABLEINTCELL_SIZE;
+            break;
+
+        case PGTYPE_INDEX_INTERNAL:
+            // 按照内部索引的格式存储, 从free space中得到其存储空间的起始地址
+            cell_pointer = data + btn->cells_offset - INDEXINTCELL_SIZE;
+            // 字节0-3存储Child Page字段
+            put4byte(cell_pointer, cell->fields.indexInternal.child_page);
+            // 字节4-7存储固定字节
+            memcpy(cell_pointer + 4, const_bytes, 4);
+            // 字节8-11存储Key字段
+            put4byte(cell_pointer + 8, cell->key);
+            // 字节12-15存储KeyPK字段
+            put4byte(cell_pointer + 12, cell->fields.indexInternal.keyPk);
+            // 更新btn的单元格偏移量
+            btn->cells_offset -= INDEXINTCELL_SIZE;
+            break;
+
+        case PGTYPE_INDEX_LEAF:
+            // 按照叶索引的格式存储, 从free space中得到其存储空间的起始地址
+            cell_pointer = data + btn->cells_offset - INDEXLEAFCELL_SIZE;
+            // 字节0-3存储常量字节
+            memcpy(cell_pointer, const_bytes, 4);
+            // 字节4-7存储Key字段
+            put4byte(cell_pointer + 4, cell->key);
+            // 字节8-11存储KeyPK字段
+            put4byte(cell_pointer + 8, cell->fields.indexLeaf.keyPk);
+            // 更新btn的单元格偏移量
+            btn->cells_offset -= INDEXLEAFCELL_SIZE;
+            break;
+
+    default:
+        abort();
+    }
+
+    // 将ncell后的单元格向后移, 保证有序
+    memmove(btn->celloffset_array + (ncell * 2) + 2, btn->celloffset_array + (ncell * 2), (btn->n_cells - ncell) * 2);
+    // 将单元格数据的偏移量存储到其对应的偏移数组的位置中
+    put2byte(btn->celloffset_array + (ncell * 2), btn->cells_offset);
+    // 更新单元格数量增加一
+    btn->n_cells++;
+    // 更新free space的偏移量增加二
+    btn->free_offset += 2;
     return CHIDB_OK;
 }
 
@@ -599,9 +677,85 @@ int chidb_Btree_insertCell(BTreeNode *btn, ncell_t ncell, BTreeCell *cell)
  */
 int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, uint16_t *size)
 {
-    /* Your code goes here */
+    BTreeCell cell;
+    BTreeNode *btn;
 
-    return CHIDB_OK;
+    int status;
+    // 尝试根据页码读取结点
+    if ((status = chidb_Btree_getNodeByPage(bt, nroot, &btn)) != CHIDB_OK)
+    {
+        // 读取失败返回错误码
+        return status;
+    }
+
+    int i;
+    // 遍历页中所有的Cell
+    for (i = 0; i < btn->n_cells; i++)
+    {
+        // 根据Cell的索引获取Cell
+        chidb_Btree_getCell(btn, i, &cell);
+        // 若键匹配且Cell类型为Table Leaf
+        if ((cell.key == key) && (btn->type == PGTYPE_TABLE_LEAF))
+        {
+            // 将结点存储的数据大小存储到size指向的空间
+            *size = cell.fields.tableLeaf.data_size;
+            // 为传出的data分配内存
+            (*data) = malloc(sizeof(uint8_t) * (*size));
+            // 若分配内存失败
+            if (!(*data))
+            {
+                // 释放内存结点(btn), 返回错误码
+                chidb_Btree_freeMemNode(bt, btn);
+                return CHIDB_ENOMEM;
+            }
+            // 复制Cell中的数据到*data指向的内存空间
+            memcpy(*data, cell.fields.tableLeaf.data, *size);
+            // 尝试释放btn结点所占的内存
+            if ((status = chidb_Btree_freeMemNode(bt, btn)) != CHIDB_OK)
+            {
+                // 失败则返回错误码
+                return status;
+            }
+            return CHIDB_OK;
+        }
+        // 若Cell中的键小于或等于给定key, 因为页中cell是有序的, 所以第一个大于或等于给定key的结点一定是包含所找Cell的页码的Cell
+        else if (cell.key >= key)
+        {
+            // 保存btn的类型
+            uint8_t temp_type = btn->type;
+            // 尝试释放btn, 失败则返回错误码
+            if ((status = chidb_Btree_freeMemNode(bt, btn)) != CHIDB_OK)
+            {
+                return status;
+            }
+            // 若类型非表叶子结点则在子页中查找
+            if (temp_type != PGTYPE_TABLE_LEAF)
+            {
+                return chidb_Btree_find(bt, cell.fields.tableInternal.child_page, key, data, size);
+            }
+            // 否则返回未找到
+            else
+            {
+                return CHIDB_ENOTFOUND;
+            }
+        }
+    }
+
+    // 若遍历页中的cells没有找到满足条件, 并且页非叶结点, 则在btn指向的右边页中继续查找
+    if (btn->type != PGTYPE_TABLE_LEAF)
+    {
+        i = btn->right_page;
+        // 尝试释放btn, 失败则返回错误码
+        if ((status = chidb_Btree_freeMemNode(bt, btn)) != CHIDB_OK)
+        {
+            return status;
+        }
+        // 在right page中继续查找
+        return chidb_Btree_find(bt, i, key, data, size);
+    }
+
+    // 上述操作均未找到返回未找到
+    return CHIDB_ENOTFOUND;
 }
 
 

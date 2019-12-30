@@ -848,6 +848,7 @@ int chidb_Btree_insertInIndex(BTree *bt, npage_t nroot, chidb_key_t keyIdx, chid
  */
 int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
 {
+    // 插入Cell到指定页
     /* Your code goes here */
 
     return CHIDB_OK;

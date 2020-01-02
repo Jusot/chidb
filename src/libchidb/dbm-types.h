@@ -50,6 +50,11 @@
 #define DEFAULT_REG_SIZE (10)
 #define DEFAULT_CUR_SIZE (10)
 
+#define EQ 0
+#define GT 1
+#define NE 2
+#define LT -1
+#define NOTCMP -2
 /* We define a "for each" macro to generate the various portions
  * of code that relate to opcodes. This is based on the solution
  * shown at http://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c

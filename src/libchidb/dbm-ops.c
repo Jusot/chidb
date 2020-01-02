@@ -80,7 +80,60 @@ int chidb_dbm_op_handle (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 /*** INSTRUCTION HANDLER IMPLEMENTATIONS ***/
 
-
+int cmp_reg_content(chidb_dbm_register_t * R1,chidb_dbm_register_t *R2){
+    if(R1->type!=R2->type)
+        return NOTCMP;
+    switch (R1->type)
+    {
+    case REG_INT32:
+        {
+            uint32_t intcmp = R1->value.i-R2->value.i;
+            if(intcmp==0)
+                return EQ;
+            else if(intcmp>0)
+                return GT;
+            else return LT;
+            break;
+        }
+    case REG_STRING:
+        {
+            int cmp = strcmp(R1->value.s,R2->value.s);
+            if(cmp==0)
+            return EQ;
+            else if(cmp>0)
+            return GT;
+            else return LT;
+            break;
+        }
+    case REG_BINARY :
+    #ifdef CMPBIN //当需要比较Bit串类型大小的时候
+        if(R1->value.bin.nbytes==R2->value.bin.nbytes)
+        {
+            uint32_t len = R1->value.bin.nbytes;
+            for(uint32_t i = 0;i<len;i++)
+                if(R1->value.bin.bytes[i]!=R2->value.bin.bytes[i])
+                    return NE;
+            return EQ;
+        }
+        else{
+            uint32_t len = R1->value.bin.nbytes > R2->value.bin.nbytes ? \
+            R2->value.bin.nbytes:R1->value.bin.nbytes;
+            uint32_t i;
+            for(i = 0;i<len;i++)
+                if(R1->value.bin.bytes[i]!=R2->value.bin.bytes[i])
+                    return NE;
+            if(len==R1->value.bin.nbytes)
+                return GT;
+            else return LT;
+            
+        }
+    #else
+        return NOTCMP;
+    #endif
+    default:
+        return NOTCMP;
+    }
+}
 int chidb_dbm_op_Noop (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     return CHIDB_OK;

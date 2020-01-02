@@ -696,7 +696,7 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
 
     int i;
     // 遍历页中所有的Cell
-    for (i = 0; i < btn->n_cells; i++)
+    for (i = 0; i < btn->n_cells; ++i)
     {
         // 根据Cell的索引获取Cell
         chidb_Btree_getCell(btn, i, &cell);
@@ -923,18 +923,20 @@ int split(BTree *bt, BTreeCell **new_cell, npage_t npage_child, npage_t *npage_c
     for (i = *m; i < old->n_cells; ++i)
     {
         BTreeCell cell;
-        chidb_Btree_getCell(btn, i, &cell);
-        chidb_Btree_insertCell(btn_left, i - *m, &cell);
+        chidb_Btree_getCell(old, i, &cell);
+        chidb_Btree_insertCell(btn, i - *m, &cell);
     }
     // 还原字段
     btn->right_page = old->right_page;
 
     // 将btn写入文件
     chidb_Btree_writeNode(bt, btn);
+    chidb_Btree_writeNode(bt, btn_left);
 
     // 释放无用结点
     chidb_Btree_freeMemNode(bt, old);
     chidb_Btree_freeMemNode(bt, btn);
+    chidb_Btree_freeMemNode(bt, btn_left);
 
     return CHIDB_OK;
 }
@@ -966,6 +968,7 @@ int insertInChild(BTree *bt, BTreeCell **new_cell, npage_t nroot, BTreeCell *btc
             {
             // 如果当前结点是内部结点
             case PGTYPE_TABLE_INTERNAL:
+            case PGTYPE_INDEX_INTERNAL:
                 // 则在该点的子结点中尝试插入
                 insertInChild(bt, &call_cell,
                     btn->type == PGTYPE_TABLE_INTERNAL
@@ -995,8 +998,8 @@ int insertInChild(BTree *bt, BTreeCell **new_cell, npage_t nroot, BTreeCell *btc
                     // 在相应的结点中插入cell
                     chidb_Btree_insertCell(btn, (i < m) ? i : (i - m), call_cell);
                 }
+                chidb_Btree_writeNode(bt, btn);
                 return CHIDB_OK;
-                break;
 
             // 如果当前结点是叶子结点
             case PGTYPE_TABLE_LEAF:
@@ -1019,11 +1022,77 @@ int insertInChild(BTree *bt, BTreeCell **new_cell, npage_t nroot, BTreeCell *btc
                     // 在相应的结点中插入btc
                     chidb_Btree_insertCell(btn, (i < m) ? i : (i - m), btc);
                 }
+                chidb_Btree_writeNode(bt, btn);
                 return CHIDB_OK;
 
             default:
                 break;
             }
+        }
+    }
+
+    // 若之前遍历未返回, 说明要在right page上插入
+    if (call_cell == NULL)
+    {
+    switch (btn->type)
+        {
+        // 如果当前结点是内部结点
+        case PGTYPE_TABLE_INTERNAL:
+        case PGTYPE_INDEX_INTERNAL:
+            // 则在该点的子结点中尝试插入
+            insertInChild(bt, &call_cell, btn->right_page, btc);
+            // 若插入后未产生新的Cell, 则直接返回
+            if (call_cell == NULL)
+            {
+                return CHIDB_OK;
+            }
+            // 如果产生了新Cell并且空间足够则直接插入
+            else if (hasRoomForCell(btn, call_cell))
+            {
+                chidb_Btree_insertCell(btn, i, call_cell);
+            }
+            // 若插入后会满则先分解, 分解后根据结点的位置插入左子树或右子树
+            else
+            {
+                // 释放btn空间
+                chidb_Btree_freeMemNode(bt, btn);
+                npage_t child_left; int m;
+                // 尝试分裂当前结点的cells
+                split(bt, new_cell, nroot, &child_left, &m);
+                // 根据i与中间值的大小获取相应的结点
+                chidb_Btree_getNodeByPage(bt, (i < m) ? child_left : nroot, &btn);
+                // 在相应的结点中插入cell
+                chidb_Btree_insertCell(btn, (i < m) ? i : (i - m), call_cell);
+            }
+            chidb_Btree_writeNode(bt, btn);
+            return CHIDB_OK;
+
+        // 如果当前结点是叶子结点
+        case PGTYPE_TABLE_LEAF:
+        case PGTYPE_INDEX_LEAF:
+            // 如果有空间插入则直接插入
+            if (hasRoomForCell(btn, btc))
+            {
+                chidb_Btree_insertCell(btn, i, btc);
+            }
+            // 若插入后会满则先分解, 分解后根据结点的位置插入左子树或右子树
+            else
+            {
+                // 释放btn空间
+                chidb_Btree_freeMemNode(bt, btn);
+                npage_t child_left; int m;
+                // 尝试分裂当前结点的cells
+                split(bt, new_cell, nroot, &child_left, &m);
+                // 根据i与中间值的大小获取相应的结点
+                chidb_Btree_getNodeByPage(bt, (i < m) ? child_left : nroot, &btn);
+                // 在相应的结点中插入btc
+                chidb_Btree_insertCell(btn, (i < m) ? i : (i - m), btc);
+            }
+            chidb_Btree_writeNode(bt, btn);
+            return CHIDB_OK;
+
+        default:
+            break;
         }
     }
 
@@ -1076,6 +1145,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
             {
             // 如果当前结点是内部结点
             case PGTYPE_TABLE_INTERNAL:
+            case PGTYPE_INDEX_INTERNAL:
                 // 则在该点的子结点中尝试插入
                 insertInChild(bt, &call_cell,
                     btn->type == PGTYPE_TABLE_INTERNAL
@@ -1097,6 +1167,7 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
                 {
                     break;
                 }
+                chidb_Btree_writeNode(bt, btn);
                 return CHIDB_OK;
 
             // 如果当前结点是叶子结点
@@ -1113,11 +1184,62 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
                     call_cell = btc;
                     break;
                 }
+                chidb_Btree_writeNode(bt, btn);
                 return CHIDB_OK;
 
             default:
                 break;
             }
+        }
+    }
+
+    // 若之前遍历未返回, 说明要在最后一个cell之后插入
+    if (call_cell == NULL)
+    {
+    switch (btn->type)
+        {
+        // 如果当前结点是内部结点
+        case PGTYPE_TABLE_INTERNAL:
+        case PGTYPE_INDEX_INTERNAL:
+            // 则在该点的子结点中尝试插入
+            insertInChild(bt, &call_cell, btn->right_page, btc);
+            // 若插入后未产生新的Cell, 则直接返回
+            if (call_cell == NULL)
+            {
+                return CHIDB_OK;
+            }
+            // 如果产生了新Cell并且空间足够则直接插入
+            else if (hasRoomForCell(btn, call_cell))
+            {
+                chidb_Btree_insertCell(btn, i, call_cell);
+            }
+            // 若空间不足够则需要新建一个空结点
+            else
+            {
+                break;
+            }
+            chidb_Btree_writeNode(bt, btn);
+            return CHIDB_OK;
+
+        // 如果当前结点是叶子结点
+        case PGTYPE_TABLE_LEAF:
+        case PGTYPE_INDEX_LEAF:
+            // 如果有空间插入则直接插入
+            if (hasRoomForCell(btn, btc))
+            {
+                chidb_Btree_insertCell(btn, i, btc);
+            }
+            // 若空间不足够则需要新建一个空结点
+            else
+            {
+                call_cell = btc;
+                break;
+            }
+            chidb_Btree_writeNode(bt, btn);
+            return CHIDB_OK;
+
+        default:
+            break;
         }
     }
 
@@ -1218,7 +1340,6 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
     chidb_Btree_writeNode(bt, btn);
     chidb_Btree_freeMemNode(bt, btn);
 
-    // 在当前根节点上插入Cell
     return CHIDB_OK;
 }
 

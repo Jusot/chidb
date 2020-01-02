@@ -1211,54 +1211,35 @@ int chidb_Btree_split(BTree *bt, npage_t npage_parent, npage_t npage_child, ncel
         }
     }
 
-    // 创建一个临时页保存切分右边的cells和right page
-    npage_t temp_num;
-    chidb_Btree_newNode(bt, &temp_num, child->type);
-    BTreeNode *temp;
-    chidb_Btree_getNodeByPage(bt, temp_num, &temp);
-    temp->right_page = child->right_page;
+    BTreeNode *right;
+    // 在npage_child的位置新建一个空结点使right指向
+    status = chidb_Btree_initEmptyNode(bt, npage_child, child->type); CHECK;
+    status = chidb_Btree_getNodeByPage(bt, npage_child, &right); CHECK;
 
-    // 将中间之后的cells插入到temp中
+    // 将中间之后的cells插入到right中
     int j;
     for (j = 0; i < child->n_cells; i++, j++)
     {
         status = chidb_Btree_getCell(child, i, &cell); CHECK;
-        status = chidb_Btree_insertCell(temp, j, &cell); CHECK;
+        status = chidb_Btree_insertCell(right, j, &cell); CHECK;
     }
+    right->right_page = child->right_page;
 
     // 释放child
     status = chidb_Btree_freeMemNode(bt, child);
 
-    BTreeNode *right;
-    // 在npage_child的位置新建一个空结点使right指向
-    status = chidb_Btree_initEmptyNode(bt, npage_child, temp->type); CHECK;
-    status = chidb_Btree_getNodeByPage(bt, npage_child, &right); CHECK;
-
-    // 更新右页的right page为之前结点的right page,
-    // 将temp中的cells插入到right中
-    right->right_page = temp->right_page;
-    for (i = 0; i < temp->n_cells; ++i)
-    {
-        chidb_Btree_getCell(temp, i, &cell);
-        chidb_Btree_insertCell(right, i, &cell);
-    }
-
-    // 释放temp并修改bt
-    chidb_Btree_freeMemNode(bt, temp);
-    bt->pager->n_pages--;
-
     // 将修改后的页写入文件
     status = chidb_Btree_writeNode(bt, parent); CHECK;
-    status = chidb_Btree_writeNode(bt, left); CHECK;
     status = chidb_Btree_writeNode(bt, right); CHECK;
+    status = chidb_Btree_writeNode(bt, left); CHECK;
 
     // 设置传出参数
     *npage_child2 = left_num;
 
     // 释放结点
     chidb_Btree_freeMemNode(bt, parent);
-    chidb_Btree_freeMemNode(bt, left);
     chidb_Btree_freeMemNode(bt, right);
+    chidb_Btree_freeMemNode(bt, left);
 
     return CHIDB_OK;
 }

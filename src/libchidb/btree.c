@@ -967,7 +967,9 @@ int chidb_Btree_insert(BTree *bt, npage_t nroot, BTreeCell *btc)
 
     // 切分原来的根节点, 并将产生的cell添加到新的根节点中
     npage_t lower_num;
-    return chidb_Btree_split(bt, nroot, new_child_num, 0, &lower_num);
+    status = chidb_Btree_split(bt, nroot, new_child_num, 0, &lower_num); CHECK;
+
+    return chidb_Btree_insertNonFull(bt, nroot, btc);
 }
 
 /* Insert a BTreeCell into a non-full B-Tree node

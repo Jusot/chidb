@@ -191,7 +191,16 @@ int chidb_dbm_op_Key (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Integer (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+    uint32_t the_reg = op->p2;
+    uint32_t num = op->p1;
+    if(!EXISTS_REGISTER(stmt,the_reg)){
+        chidb_dbm_register_t *temp = (chidb_dbm_register_t*)realloc(stmt->reg,sizeof(chidb_dbm_register_t)*(the_reg+1));
+        stmt->reg = temp;
+        stmt->nReg = the_reg;
+    }
+    stmt->reg[the_reg].type = REG_INT32;
+    stmt->reg[the_reg].value.i = num;
+    return CHIDB_OK;
 
     return CHIDB_OK;
 }
@@ -199,19 +208,35 @@ int chidb_dbm_op_Integer (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_String (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    uint32_t the_reg = op->p2;
+    uint32_t length = op->p1;
+    if(!EXISTS_REGISTER(stmt,the_reg)){
+        chidb_dbm_register_t *temp = (chidb_dbm_register_t*)realloc(stmt->reg,sizeof(chidb_dbm_register_t)*(the_reg+1));
+        stmt->reg = temp;
+        stmt->nReg = the_reg;
+    }
+    free(stmt->reg[the_reg].value.s);
+    stmt->reg[the_reg].type = REG_STRING;
+    stmt->reg[the_reg].value.s = (char*)malloc(length+1);
+    strncpy(stmt->reg[the_reg].value.s,op->p4,length);
+    return CHIDB_OK;
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Null (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+     uint32_t the_reg = op->p2;
+    if(!EXISTS_REGISTER(stmt,the_reg)){
+        //如果寄存器数量不够，就再加一个
+        chidb_dbm_register_t *temp = (chidb_dbm_register_t*)realloc(stmt->reg,sizeof(chidb_dbm_register_t)*(the_reg+1));
+        stmt->reg = temp;
+        stmt->nReg = the_reg;
+    }
+    stmt->reg[the_reg].type = REG_NULL;
+    stmt->reg[the_reg].value.bin.nbytes = 0;
+    stmt->reg[the_reg].value.bin.bytes = NULL;
     return CHIDB_OK;
-
-    return 0;
 }
 
 
@@ -241,39 +266,75 @@ int chidb_dbm_op_Insert (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Eq (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    uint32_t reg1 = op->p1;
+    uint32_t reg2 = op->p3;
+    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
+        return CHIDB_OK;
+    chidb_dbm_register_t R1 = stmt->reg[reg1];
+    chidb_dbm_register_t R2 = stmt->reg[reg2];
+    int cmp = cmp_reg_content(&R1,&R2);
+    if(cmp==EQ)
+        stmt->pc = op->p2;
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Ne (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    uint32_t reg1 = op->p1;
+    uint32_t reg2 = op->p3;
+    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
+        return CHIDB_OK;
+    chidb_dbm_register_t R1 = stmt->reg[reg1];
+    chidb_dbm_register_t R2 = stmt->reg[reg2];
+    int cmp = cmp_reg_content(&R1,&R2);
+    if(cmp!=EQ&&cmp!=NOTCMP)   
+        stmt->pc = op->p2;
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Lt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    uint32_t reg1 = op->p1;
+    uint32_t reg2 = op->p3;
+    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
+        return CHIDB_OK;
+    chidb_dbm_register_t R1 = stmt->reg[reg1];
+    chidb_dbm_register_t R2 = stmt->reg[reg2];
+    int cmp = cmp_reg_content(&R1,&R2);
+    if(cmp==LT)
+        stmt->pc = op->p2;
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Le (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    uint32_t reg1 = op->p1;
+    uint32_t reg2 = op->p3;
+    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
+        return CHIDB_OK;
+    chidb_dbm_register_t R1 = stmt->reg[reg1];
+    chidb_dbm_register_t R2 = stmt->reg[reg2];
+    int cmp = cmp_reg_content(&R1,&R2);
+    if(cmp==EQ||cmp==LT)
+        stmt->pc = op->p2;
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Gt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
+   uint32_t reg1 = op->p1;
+    uint32_t reg2 = op->p3;
+    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
+        return CHIDB_OK;
+    chidb_dbm_register_t R1 = stmt->reg[reg1];
+    chidb_dbm_register_t R2 = stmt->reg[reg2];
+    int cmp = cmp_reg_content(&R1,&R2);
+    if(cmp==GT)
+        stmt->pc = op->p2;
 
     return CHIDB_OK;
 }
@@ -281,8 +342,15 @@ int chidb_dbm_op_Gt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Ge (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    /* Your code goes here */
-
+    uint32_t reg1 = op->p1;
+    uint32_t reg2 = op->p3;
+    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
+        return CHIDB_OK;
+    chidb_dbm_register_t R1 = stmt->reg[reg1];
+    chidb_dbm_register_t R2 = stmt->reg[reg2];
+    int cmp = cmp_reg_content(&R1,&R2);
+    if(cmp==EQ||cmp==GT)
+        stmt->pc = op->p2;
     return CHIDB_OK;
 }
 

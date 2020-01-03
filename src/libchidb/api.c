@@ -89,7 +89,7 @@ int load_schema(chidb *db, npage_t nroot)
 			chidb_DBRecord_getString(dbr, 0, &item->type);
 			chidb_DBRecord_getString(dbr, 1, &item->name);
 			chidb_DBRecord_getString(dbr, 2, &item->assoc);
-			chidb_DBRecord_getInt32(dbr, 3, &item->root_page);
+			chidb_DBRecord_getInt32 (dbr, 3, &item->root_page);
 			chidb_DBRecord_getString(dbr, 4, &sql);
 			// 解析sql语句写入item->stmt
 			chisql_parser(sql, &item->stmt);

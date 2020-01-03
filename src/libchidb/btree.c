@@ -836,8 +836,8 @@ int hasRoomForCell(BTreeNode *btn, BTreeCell *btc)
     int size = 0,
         space = btn->cells_offset - btn->free_offset;
 
-    // 根据Cell的类型更新size
-    switch (btc->type)
+    // 根据当前结点的类型更新size
+    switch (btn->type)
     {
     case PGTYPE_TABLE_LEAF:
         size = TABLELEAFCELL_SIZE_WITHOUTDATA + btc->fields.tableLeaf.data_size;

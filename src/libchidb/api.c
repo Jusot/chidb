@@ -53,10 +53,64 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt);
 
 /* Implemented in optimizer.c */
 int chidb_stmt_optimize(chidb *db,
-			chisql_statement_t *sql_stmt, 
+			chisql_statement_t *sql_stmt,
 			chisql_statement_t **sql_stmt_opt);
 
-  /* your code */
+// Step 1
+// 读取Schema表
+int load_schema(chidb *db, npage_t nroot)
+{
+	// 读取nroot页
+	Btree *bt = db->bt;
+	BTreeNode *btn;
+	chidb_Btree_getNodeByPage(bt, nroot, &btn);
+
+	// 遍历当前页面的所有cells
+	int i;
+	for (i = 0; i < btn->n_cells; ++i)
+	{
+		BTreeCell cell;
+		chidb_Btree_getCell(btn, i, &cell);
+
+		// 如果是页表内部结点
+		if (btn->type == PGTYPE_TABLE_INTERNAL)
+		{
+			load_schema(db, cell.fields.tableInternal.child_page);
+		}
+		// 如果是页表叶子结点
+		else
+		{
+			// 为schema中的一行申请空间
+			schema_item_t *item = malloc(sizeof(schema_item_t));
+			DBRecord *dbr;
+			char *sql;
+			chidb_DBRecord_unpack(&dbr, cell.fields.tableLeaf.data);
+			// 将Record中的字段写入item
+			chidb_DBRecord_getString(dbr, 0, &item->type);
+			chidb_DBRecord_getString(dbr, 1, &item->name);
+			chidb_DBRecord_getString(dbr, 2, &item->assoc);
+			chidb_DBRecord_getInt32(dbr, 3, &item->root_page);
+			chidb_DBRecord_getString(dbr, 4, &sql);
+			// 解析sql语句写入item->stmt
+			chisql_parser(sql, &item->stmt);
+			// 将该行加入到db中的schemas列表最后
+			schema_append(db->schema, &db->num, item);
+			// 释放空间
+			free(sql);
+			chidb_DBRecord_destroy(dbr);
+		}
+	}
+
+	// 如果不是叶子结点, 则还需要加载right page
+	if (btn->type != PGTYPE_TABLE_LEAF)
+	{
+		return load_schema(db, btn->right_page);
+	}
+
+	// 释放内存
+	chidb_Btree_freeMemNode(bt, btn);
+	return CHIDB_OK;
+}
 
 int chidb_open(const char *file, chidb **db)
 {
@@ -65,7 +119,14 @@ int chidb_open(const char *file, chidb **db)
         return CHIDB_ENOMEM;
     chidb_Btree_open(file, *db, &(*db)->bt);
 
-    /* Additional initialization code goes here */
+	// 初始化schemas
+	(*db)->schema = schema_init();
+	(*db)->num = 0;
+	// 初始化need_refresh
+	(*db)->need_refresh = 0;
+	// 读取schema
+	load_schema(*db, 1);
+
     return CHIDB_OK;
 }
 
@@ -73,9 +134,7 @@ int chidb_close(chidb *db)
 {
     chidb_Btree_close(db->bt);
     free(db);
-
-    /* Additional cleanup code goes here */
-
+	schema_destroy(db->schema);
     return CHIDB_OK;
 }
 

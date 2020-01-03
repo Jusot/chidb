@@ -59,7 +59,7 @@ make check
 
 #### Steps
 
-+ [ ] Step 1: Schema Loading
++ [x] Step 1: Schema Loading
 + [ ] Step 2: Simple SELECT Code Generation
 + [ ] Step 3: INSERT Code Generation
 + [ ] Step 4: CREATE TABLE Code Generation

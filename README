@@ -29,7 +29,20 @@ make check
 
 ### Assignment 1
 
+#### Files
+
 + [x] src/libchidb/btree.c
+
+#### Steps
+
++ [x] Step 1: Opening a chidb file
++ [x] Step 2: Loading a B-Tree node from the file
++ [x] Step 3: Creating and writing a B-Tree node to disk
++ [x] Step 4: Manipulating B-Tree cells
++ [x] Step 5: Finding a value in a B-Tree
++ [x] Step 6: Insertion into a leaf without splitting
++ [x] Step 7: Insertion with splitting
++ [x] Step 8: Supporting index B-Trees
 
 ### Assignment 2
 
@@ -37,10 +50,20 @@ make check
 
 ### Assignment 3
 
+#### Files
+
 + [ ] src/libchidb/chidbInt.h
 + [ ] src/libchidb/api.c
 + [ ] src/libchidb/utils.\[hc\]
 + [ ] src/libchidb/codegen.c
+
+#### Steps
+
++ [x] Step 1: Schema Loading
++ [ ] Step 2: Simple SELECT Code Generation
++ [ ] Step 3: INSERT Code Generation
++ [ ] Step 4: CREATE TABLE Code Generation
++ [ ] Step 5: NATURAL JOIN Code Generation
 
 ### Assignment 4
 

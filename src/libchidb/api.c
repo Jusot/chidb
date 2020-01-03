@@ -47,6 +47,7 @@
 #include "btree.h"
 #include "record.h"
 #include "util.h"
+#include "../simclist/simclist.h"
 
 /* Implemented in codegen.c */
 int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt);
@@ -60,8 +61,9 @@ int chidb_stmt_optimize(chidb *db,
 // 读取Schema表
 int load_schema(chidb *db, npage_t nroot)
 {
-	// 读取nroot页
 	Btree *bt = db->bt;
+
+	// 读取nroot页
 	BTreeNode *btn;
 	chidb_Btree_getNodeByPage(bt, nroot, &btn);
 
@@ -78,23 +80,23 @@ int load_schema(chidb *db, npage_t nroot)
 			load_schema(db, cell.fields.tableInternal.child_page);
 		}
 		// 如果是页表叶子结点
-		else
+		else if (btn->type == PGTYPE_TABLE_LEAF)
 		{
-			// 为schema中的一行申请空间
-			schema_item_t *item = malloc(sizeof(schema_item_t));
 			DBRecord *dbr;
-			char *sql;
 			chidb_DBRecord_unpack(&dbr, cell.fields.tableLeaf.data);
-			// 将Record中的字段写入item
-			chidb_DBRecord_getString(dbr, 0, &item->type);
-			chidb_DBRecord_getString(dbr, 1, &item->name);
-			chidb_DBRecord_getString(dbr, 2, &item->assoc);
-			chidb_DBRecord_getInt32 (dbr, 3, &item->root_page);
+			// 为schema中的一行申请空间
+			schema_t *schema = malloc(sizeof(schema_t));
+			// 将Record中的字段写入schema
+			chidb_DBRecord_getString(dbr, 0, &schema->type);
+			chidb_DBRecord_getString(dbr, 1, &schema->name);
+			chidb_DBRecord_getString(dbr, 2, &schema->assoc);
+			chidb_DBRecord_getInt32 (dbr, 3, &schema->root_page);
+			char *sql;
 			chidb_DBRecord_getString(dbr, 4, &sql);
-			// 解析sql语句写入item->stmt
-			chisql_parser(sql, &item->stmt);
-			// 将该行加入到db中的schemas列表最后
-			schema_append(db->schema, &db->num, item);
+			// 解析sql语句写入schema->stmt
+			chisql_parser(sql, &schema->stmt);
+			// 将该行加入到db中的schema里
+			list_append(&db->schemas, schema);
 			// 释放空间
 			free(sql);
 			chidb_DBRecord_destroy(dbr);
@@ -104,7 +106,7 @@ int load_schema(chidb *db, npage_t nroot)
 	// 如果不是叶子结点, 则还需要加载right page
 	if (btn->type != PGTYPE_TABLE_LEAF)
 	{
-		return load_schema(db, btn->right_page);
+		load_schema(db, btn->right_page);
 	}
 
 	// 释放内存
@@ -120,8 +122,7 @@ int chidb_open(const char *file, chidb **db)
     chidb_Btree_open(file, *db, &(*db)->bt);
 
 	// 初始化schemas
-	(*db)->schema = schema_init();
-	(*db)->num = 0;
+	list_init(&(*db)->schemas);
 	// 初始化need_refresh
 	(*db)->need_refresh = 0;
 	// 读取schema
@@ -133,8 +134,21 @@ int chidb_open(const char *file, chidb **db)
 int chidb_close(chidb *db)
 {
     chidb_Btree_close(db->bt);
+
+	// 不断获取list中的第一个值并释放其中的指针指向的空间
+	while (!list_empty(&db->schemas))
+	{
+		schema_t *schema = (schema_t *)list_fetch(&db->schemas);
+		chisql_statement_free(schema->stmt);
+		free(schema->type);
+		free(schema->name);
+		free(schema->assoc);
+		free(schema);
+	}
+
+	// 释放list的空间
+	list_destroy(&db->schemas);
     free(db);
-	schema_destroy(db->schema);
     return CHIDB_OK;
 }
 

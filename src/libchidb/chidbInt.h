@@ -49,6 +49,7 @@
 #include <assert.h>
 #include <string.h>
 #include <chidb/chidb.h>
+#include "../simclist/simclist.h"
 
 // Private codes (shouldn't be used by API users)
 #define CHIDB_NOHEADER (1)
@@ -73,48 +74,15 @@ typedef uint32_t chidb_key_t;
 /* Forward declaration */
 typedef struct BTree BTree;
 
-typedef struct schema_list
+// struct for schema
+typedef struct schema_t
 {
     char *type;
     char *name;
     char *assoc;
     int root_page;
     chisql_statement_t *stmt;
-    struct schema_list *next;
-} *schema_t, schema_item_t;
-
-inline schema_t schema_init()
-{
-    schema_t schema = malloc(sizeof(schema_t));
-    schema->next = NULL;
-    return schema;
-}
-
-inline void schema_append(schema_t schema,
-    int *num, schema_item_t *item)
-{
-    schema_item_t *temp = schema;
-    int i;
-    for (i = 0; i < *num; ++i)
-    {
-        temp = temp->next;
-    }
-    ++(*num);
-    temp->next = item;
-}
-
-inline void schema_destroy(schema_t schema)
-{
-    if (schema != NULL)
-    {
-        schema_destroy(schema->next);
-        free(schema->type);
-        free(schema->name);
-        free(schema->assoc);
-        free(schema->stmt);
-        free(schema);
-    }
-}
+} schema_t;
 
 /* A chidb database is initially only a BTree.
  * This presuposes that only the btree.c module has been implemented.
@@ -124,8 +92,7 @@ inline void schema_destroy(schema_t schema)
 struct chidb
 {
     BTree   *bt;
-    schema_t schema;
-    int num;          // 表示schema的长度
+    list_t schemas;
     int need_refresh; // 创建新表之后会置为1
 };
 

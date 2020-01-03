@@ -282,3 +282,31 @@ int chidb_tokenize(char *str, char ***tokens)
     return ntokens;
 }
 
+void chisql_statement_free(chisql_statement_t *sql_stmt)
+{
+    switch (sql_stmt->type)
+    {
+        case STMT_CREATE:
+        {
+            Create_free(sql_stmt->stmt.create);
+        } break;
+
+        case STMT_SELECT:
+        {
+            SRA_free(sql_stmt->stmt.select);
+        } break;
+
+        case STMT_INSERT:
+        {
+            Insert_free(sql_stmt->stmt.insert);
+        } break;
+
+        case STMT_DELETE:
+        {
+            Delete_free(sql_stmt->stmt.delete);
+        } break;
+    }
+
+    free(sql_stmt->text);
+    free(sql_stmt);
+}

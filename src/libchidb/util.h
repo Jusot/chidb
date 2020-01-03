@@ -68,5 +68,6 @@ void chidb_BTree_stringPrinter(BTreeNode *btn, BTreeCell *btc);
 
 FILE *copy(const char *from, const char *to);
 
+void chisql_statement_free(chisql_statement_t *sql_stmt);
 
 #endif /*UTIL_H_*/

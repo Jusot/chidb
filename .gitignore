@@ -20,11 +20,14 @@ libtool
 config.*
 stamp*
 .libs/
-libchi*
+libchi
 libsimclist*
 chidb
 *.o
 *.lo
+*.la
+sql-lexer*
+sql-parser*
 .vscode/
 check_btree
 

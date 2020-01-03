@@ -71,19 +71,19 @@ int load_schema(chidb *db, npage_t nroot)
 	int i;
 	for (i = 0; i < btn->n_cells; ++i)
 	{
-		BTreeCell cell;
-		chidb_Btree_getCell(btn, i, &cell);
+		BTreeCell *cell = malloc(sizeof(BTreeCell));
+		chidb_Btree_getCell(btn, i, cell);
 
 		// 如果是页表内部结点
 		if (btn->type == PGTYPE_TABLE_INTERNAL)
 		{
-			load_schema(db, cell.fields.tableInternal.child_page);
+			load_schema(db, cell->fields.tableInternal.child_page);
 		}
 		// 如果是页表叶子结点
 		else if (btn->type == PGTYPE_TABLE_LEAF)
 		{
 			DBRecord *dbr;
-			chidb_DBRecord_unpack(&dbr, cell.fields.tableLeaf.data);
+			chidb_DBRecord_unpack(&dbr, cell->fields.tableLeaf.data);
 			// 为schema中的一行申请空间
 			schema_t *schema = malloc(sizeof(schema_t));
 			// 将Record中的字段写入schema
@@ -101,6 +101,8 @@ int load_schema(chidb *db, npage_t nroot)
 			free(sql);
 			chidb_DBRecord_destroy(dbr);
 		}
+
+		free(cell);
 	}
 
 	// 如果不是叶子结点, 则还需要加载right page

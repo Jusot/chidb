@@ -52,14 +52,14 @@ make check
 
 #### Files
 
-+ [ ] src/libchidb/chidbInt.h
-+ [ ] src/libchidb/api.c
++ [x] src/libchidb/chidbInt.h
++ [x] src/libchidb/api.c
 + [ ] src/libchidb/utils.\[hc\]
 + [ ] src/libchidb/codegen.c
 
 #### Steps
 
-+ [x] Step 1: Schema Loading
++ [ ] Step 1: Schema Loading
 + [ ] Step 2: Simple SELECT Code Generation
 + [ ] Step 3: INSERT Code Generation
 + [ ] Step 4: CREATE TABLE Code Generation

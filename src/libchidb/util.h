@@ -68,6 +68,23 @@ void chidb_BTree_stringPrinter(BTreeNode *btn, BTreeCell *btc);
 
 FILE *copy(const char *from, const char *to);
 
-void chisql_statement_free(chisql_statement_t *sql_stmt);
+// --------- My Code Begin ---------
+// ------------------------------------
+/** In step 1, functions to perform the following operations
+ * 1. Given a table name, determine whether such a table exists.
+ * 2. Given a table name, obtain its root page.
+ * 3. Given a table name and a column name, determine whether such a column exists in the table.
+ * 4. Given a table name and a column name, obtain the type of the column.
+ */
+// 检查是否已存在给定table, 存在则返回1, 不存在则返回0
+int chidb_check_table_exist(chidb_schema_t schema, char *table);
+// 获取给定table所在的根页码, 不存在则返回0
+int chidb_get_root_page_of_table(chidb_schema_t schema, char *table);
+// 检查在给定table中是否存在给定列, 存在返回1, 否则返回0
+int chidb_check_column_exist(chidb_schema_t schema, char *table, char *column);
+// 获取给定table中给定column的类型, 不存在则返回-1
+int chidb_get_type_of_column(chidb_schema_t schema, char *table, char *column);
 
+void chisql_statement_free(chisql_statement_t *sql_stmt);
+// --------- My Code End ---------
 #endif /*UTIL_H_*/

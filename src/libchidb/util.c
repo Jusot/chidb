@@ -282,6 +282,130 @@ int chidb_tokenize(char *str, char ***tokens)
     return ntokens;
 }
 
+// --------- My Code Begin ---------
+
+int chidb_check_table_exist(chidb_schema_t schema, char *table)
+{
+    // 初始化迭代器
+    list_iterator_start(&schema);
+
+    // 遍历schema每一项
+    while (list_iterator_hasnext(&schema))
+    {
+        // 获取当前项的指针
+        chidb_schema_item_t *item = (chidb_schema_item_t *)(list_iterator_next(&schema));
+        // name 与 table相等则返回1
+        if (!strcmp(item->name, table))
+        {
+            list_iterator_stop(&schema);
+            return 1;
+        }
+    }
+
+    // 结束迭代器
+    list_iterator_stop(&schema);
+
+    // 不存在返回0
+    return 0;
+}
+
+int chidb_get_root_page_of_table(chidb_schema_t schema, char *table)
+{
+    // 初始化迭代器
+    list_iterator_start(&schema);
+
+    // 遍历schema每一项
+    while (list_iterator_hasnext(&schema))
+    {
+        // 获取当前项的指针
+        chidb_schema_item_t *item = (chidb_schema_item_t *)(list_iterator_next(&schema));
+        // name 与 table相等则返回对应的root page
+        if (!strcmp(item->name, table))
+        {
+            list_iterator_stop(&schema);
+            return item->root_page;
+        }
+    }
+
+    // 结束迭代器
+    list_iterator_stop(&schema);
+
+    // 不存在返回0
+    return 0;
+}
+
+int chidb_check_column_exist(chidb_schema_t schema, char *table, char *column)
+{
+    // 初始化迭代器
+    list_iterator_start(&schema);
+
+    // 遍历schema每一项
+    while (list_iterator_hasnext(&schema))
+    {
+        // 获取当前项的指针
+        chidb_schema_item_t *item = (chidb_schema_item_t *)(list_iterator_next(&schema));
+        // name 与 table相等则在其中查找
+        if (!strcmp(item->name, table))
+        {
+            // 遍历给定表中的列
+            Column_t *cur_column = item->stmt->stmt.create->table->columns;
+            while (cur_column != NULL)
+            {
+                // 若当前列名与给定列名相同, 返回1
+                if (!strcmp(cur_column->name, column))
+                {
+                    list_iterator_stop(&schema);
+                    return 1;
+                }
+                // 若不同则更新当前列指针指向下一列
+            }
+            // 不存在返回0
+            list_iterator_stop(&schema);
+            return 0;
+        }
+    }
+
+    list_iterator_stop(&schema);
+    // 不存在返回0
+    return 0;
+}
+
+int chidb_get_type_of_column(chidb_schema_t schema, char *table, char *column)
+{
+    // 初始化迭代器
+    list_iterator_start(&schema);
+
+    // 遍历schema每一项
+    while (list_iterator_hasnext(&schema))
+    {
+        // 获取当前项的指针
+        chidb_schema_item_t *item = (chidb_schema_item_t *)(list_iterator_next(&schema));
+        // name 与 table相等则在其中查找
+        if (!strcmp(item->name, table))
+        {
+            // 遍历给定表中的列
+            Column_t *cur_column = item->stmt->stmt.create->table->columns;
+            while (cur_column != NULL)
+            {
+                // 若当前列名与给定列名相同, 返回类型
+                if (!strcmp(cur_column->name, column))
+                {
+                    list_iterator_stop(&schema);
+                    return cur_column->type;
+                }
+                // 若不同则更新当前列指针指向下一列
+            }
+            // 不存在返回-1
+            list_iterator_stop(&schema);
+            return -1;
+        }
+    }
+
+    list_iterator_stop(&schema);
+    // 不存在返回-1
+    return -1;
+}
+
 void chisql_statement_free(chisql_statement_t *sql_stmt)
 {
     switch (sql_stmt->type)
@@ -310,3 +434,4 @@ void chisql_statement_free(chisql_statement_t *sql_stmt)
     free(sql_stmt->text);
     free(sql_stmt);
 }
+// --------- My Code End ---------

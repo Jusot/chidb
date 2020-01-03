@@ -76,7 +76,7 @@ void RA_print(RA_t *ra)
 }
 
 /* TODO: This function depended on the "mock_db" module that assumed that
- * the table schemas would be provided in the SQL file being parsed
+ * the table schema would be provided in the SQL file being parsed
  * (via CREATE TABLE statements). Instead, the schema is read from
  * the chidb file. This function should be modified to obtain the
  * columns some other way (possibly as an extra parameter)

@@ -74,15 +74,18 @@ typedef uint32_t chidb_key_t;
 /* Forward declaration */
 typedef struct BTree BTree;
 
-// struct for schema
-typedef struct schema_t
+// --------- My Code Begin ---------
+// 定义Schema结构
+typedef struct
 {
     char *type;
     char *name;
     char *assoc;
     int root_page;
     chisql_statement_t *stmt;
-} schema_t;
+} chidb_schema_item_t;
+
+typedef list_t chidb_schema_t;
 
 /* A chidb database is initially only a BTree.
  * This presuposes that only the btree.c module has been implemented.
@@ -92,8 +95,9 @@ typedef struct schema_t
 struct chidb
 {
     BTree   *bt;
-    list_t schemas;
+    chidb_schema_t schema;
     int need_refresh; // 创建新表之后会置为1
 };
+// --------- My Code End ---------
 
 #endif /*CHIDBINT_H_*/

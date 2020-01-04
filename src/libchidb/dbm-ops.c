@@ -76,8 +76,8 @@ struct handler_entry dbm_handlers[] =
  返回值定义在 dbm-types.h中
 *RETURN :
 * EQ 相等
-* GT r1>r2  
-* LT r1<r2 
+* GT r1>r2
+* LT r1<r2
 * NE r1!=r2  不相等(用于BIN类型)
 * NOTCMP 类型不同或 REG_UNSPECIFIED  REG_NULL  REG_BINARY 的返回
 */
@@ -127,7 +127,7 @@ int cmp_reg_content(chidb_dbm_register_t * R1,chidb_dbm_register_t *R2){
             if(len==R1->value.bin.nbytes)
                 return GT;
             else return LT;
-            
+
         }
     #else
         return NOTCMP;
@@ -155,7 +155,7 @@ int chidb_dbm_op_Noop (chidb_stmt *stmt, chidb_dbm_op_t *op)
 int chidb_dbm_op_OpenRead (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     /* Your code goes here */
-    
+
     return CHIDB_OK;
 }
 
@@ -277,7 +277,7 @@ int chidb_dbm_op_String (chidb_stmt *stmt, chidb_dbm_op_t *op)
     uint32_t the_reg = op->p2;
     uint32_t length = op->p1;
     if(!EXISTS_REGISTER(stmt,the_reg)){
-       
+
         chidb_dbm_register_t *temp = (chidb_dbm_register_t*)realloc(stmt->reg,sizeof(chidb_dbm_register_t)*(the_reg+1));
         stmt->reg = temp;
         stmt->nReg = the_reg;
@@ -285,7 +285,7 @@ int chidb_dbm_op_String (chidb_stmt *stmt, chidb_dbm_op_t *op)
     free(stmt->reg[the_reg].value.s);
     stmt->reg[the_reg].type = REG_STRING;
     stmt->reg[the_reg].value.s = (char*)malloc(length+1);
-    strncpy(stmt->reg[the_reg].value.s,op->p4,length);
+    strncpy(stmt->reg[the_reg].value.s,op->p4,length+1);
     return CHIDB_OK;
 }
 
@@ -295,7 +295,7 @@ int chidb_dbm_op_Null (chidb_stmt *stmt, chidb_dbm_op_t *op)
     /* Your code goes here */
     uint32_t the_reg = op->p2;
     if(!EXISTS_REGISTER(stmt,the_reg)){
- 
+
         chidb_dbm_register_t *temp = (chidb_dbm_register_t*)realloc(stmt->reg,sizeof(chidb_dbm_register_t)*(the_reg+1));
         stmt->reg = temp;
         stmt->nReg = the_reg;
@@ -325,7 +325,7 @@ int chidb_dbm_op_MakeRecord (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Insert (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    
+
 
     return CHIDB_OK;
 }
@@ -348,7 +348,7 @@ int chidb_dbm_op_Eq (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Ne (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-  
+
     uint32_t reg1 = op->p1;
     uint32_t reg2 = op->p3;
     if(reg1>=stmt->nReg||reg2>=stmt->nReg)
@@ -356,7 +356,7 @@ int chidb_dbm_op_Ne (chidb_stmt *stmt, chidb_dbm_op_t *op)
     chidb_dbm_register_t R1 = stmt->reg[reg1];
     chidb_dbm_register_t R2 = stmt->reg[reg2];
     int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp!=EQ&&cmp!=NOTCMP)   
+    if(cmp!=EQ&&cmp!=NOTCMP)
         stmt->pc = op->p2;
     return CHIDB_OK;
 }
@@ -429,7 +429,7 @@ int chidb_dbm_op_Ge (chidb_stmt *stmt, chidb_dbm_op_t *op)
  * p1: cursor
  * p2: jump addr
  * p3: register containing value k
- * 
+ *
  * if (idxkey at cursor p1) > k, jump
  */
 int chidb_dbm_op_IdxGt (chidb_stmt *stmt, chidb_dbm_op_t *op)
@@ -443,7 +443,7 @@ int chidb_dbm_op_IdxGt (chidb_stmt *stmt, chidb_dbm_op_t *op)
  * p1: cursor
  * p2: jump addr
  * p3: register containing value k
- * 
+ *
  * if (idxkey at cursor p1) >= k, jump
  */
 int chidb_dbm_op_IdxGe (chidb_stmt *stmt, chidb_dbm_op_t *op)
@@ -457,7 +457,7 @@ int chidb_dbm_op_IdxGe (chidb_stmt *stmt, chidb_dbm_op_t *op)
  * p1: cursor
  * p2: jump addr
  * p3: register containing value k
- * 
+ *
  * if (idxkey at cursor p1) < k, jump
  */
 int chidb_dbm_op_IdxLt (chidb_stmt *stmt, chidb_dbm_op_t *op)
@@ -471,7 +471,7 @@ int chidb_dbm_op_IdxLt (chidb_stmt *stmt, chidb_dbm_op_t *op)
  * p1: cursor
  * p2: jump addr
  * p3: register containing value k
- * 
+ *
  * if (idxkey at cursor p1) <= k, jump
  */
 int chidb_dbm_op_IdxLe (chidb_stmt *stmt, chidb_dbm_op_t *op)
@@ -556,4 +556,3 @@ int chidb_dbm_op_Halt (chidb_stmt *stmt, chidb_dbm_op_t *op)
     exit(op->p1);
     return CHIDB_OK;
 }
-

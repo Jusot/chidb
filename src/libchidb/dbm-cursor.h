@@ -43,6 +43,9 @@
 
 #include "chidbInt.h"
 #include "btree.h"
+#include "../simclist/simclist.h"
+
+typedef uint32_t ncol_t;   // number of columns a table has OR the number of a column
 
 typedef enum chidb_dbm_cursor_type
 {
@@ -51,15 +54,72 @@ typedef enum chidb_dbm_cursor_type
     CURSOR_WRITE
 } chidb_dbm_cursor_type_t;
 
+typedef enum chidb_dbm_seek_type
+{
+    SEEK,
+    SEEKLE,
+    SEEKGE,
+    SEEKLT,
+    SEEKGT
+} chidb_dbm_seek_type_t;
+
+typedef struct chidb_dbm_cursor_trail
+{
+    uint32_t depth; 
+    //表明该节点在链表中的位置
+
+    BTreeNode *btn; //B树节点，储存一页中的cell
+
+    int n_current_cell; // 子页面对应的cell
+} chidb_dbm_cursor_trail_t;
+
 typedef struct chidb_dbm_cursor
 {
+    BTreeCell current_cell; // 用于指示当前的游标所指的cell
+
+    npage_t root_page;      // 用于rewind 将cursor指向表的根页
+    uint8_t root_type;      // 表类型 索引，页表或者Internal类型
+
+    ncol_t n_cols;          // 表的列数
+    list_t trail;           // 用于跟踪游标的位置的链表
+
     chidb_dbm_cursor_type_t type;
 
-    /* Your code goes here */
+}chidb_dbm_cursor_t;
 
-} chidb_dbm_cursor_t;
+//游标的基本操作
+int chidb_dbm_cursor_trail_new(BTree *bt, chidb_dbm_cursor_trail_t **ct, npage_t npage, uint32_t depth);
+int chidb_dbm_cursor_trail_list_destroy(BTree *bt, list_t *restrict l);
+int chidb_dbm_cursor_trail_cpy(BTree *bt, list_t *restrict l1, list_t *restrict l2);
+int chidb_dbm_cursor_clear_trail_from(BTree *bt, chidb_dbm_cursor_t *c, uint32_t depth); 
+int chidb_dbm_cursor_trail_remove_at(BTree *bt, chidb_dbm_cursor_t *c, uint32_t depth);
 
-/* Cursor function definitions go here */
+
+//初始化和销毁游标
+int chidb_dbm_cursor_init(BTree *bt, chidb_dbm_cursor_t *c, npage_t root_page, ncol_t n_cols);
+int chidb_dbm_cursor_destroy(BTree *bt, chidb_dbm_cursor_t *c);
+
+//封装好的游标移动和SEEK
+int chidb_dbm_cursor_fwd(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursor_rev(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursor_seek(BTree *bt, chidb_dbm_cursor_t *c, chidb_key_t key, npage_t next, int depth, int seek_type);
+
+
+//具体操作
+int chidb_dbm_cursorTable_fwd(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorTable_fwdUp(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorTable_fwdDwn(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorIndex_fwd(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorIndex_fwdUp(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorIndex_fwdDwn(BTree *bt, chidb_dbm_cursor_t *c);
+
+int chidb_dbm_cursorTable_rev(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorTable_revUp(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorTable_revDwn(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorIndex_rev(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorIndex_revUp(BTree *bt, chidb_dbm_cursor_t *c);
+int chidb_dbm_cursorIndex_revDwn(BTree *bt, chidb_dbm_cursor_t *c);
+
 
 
 #endif /* DBM_CURSOR_H_ */

@@ -62,6 +62,8 @@
 #define CHIDB_EEMPTY (9)
 #define CHIDB_EPARSE (10)
 
+#define CHIDB_ETYPE (11) // invalid type in switch stmt
+#define CHIDB_ENOREG (37) //Error accessing register
 
 #define DEFAULT_PAGE_SIZE (1024)
 

@@ -48,10 +48,11 @@ int chidb_dbm_op_WriteReg (chidb_stmt *stmt, int regNo, int reg_type, void *data
 int realloc_cur(chidb_stmt *stmt, uint32_t size);
 int realloc_reg(chidb_stmt *stmt, uint32_t size);
 
-/* Function pointer for dispatch table */
+
+
 typedef int (*handler_function)(chidb_stmt *stmt, chidb_dbm_op_t *op);
 
-/* Single entry in the instruction dispatch table */
+
 struct handler_entry
 {
     opcode_t opcode;
@@ -73,74 +74,10 @@ FOREACH_OP(HANDLER_PROTOTYPE)
 #define HANDLER_ENTRY(OP) { Op_ ## OP, chidb_dbm_op_## OP},
 
 struct handler_entry dbm_handlers[] =
-{
-    FOREACH_OP(HANDLER_ENTRY)
-};
-/*
- 一个用来比较寄存器内容的函数
- 返回值定义在 dbm-types.h中
-*RETURN :
-* EQ 相等
-* GT r1>r2
-* LT r1<r2
-* NE r1!=r2  不相等(用于BIN类型)
-* NOTCMP 类型不同或 REG_UNSPECIFIED  REG_NULL  REG_BINARY 的返回
-*/
+        {
+                FOREACH_OP(HANDLER_ENTRY)
+        };
 
-int cmp_reg_content(chidb_dbm_register_t * R1,chidb_dbm_register_t *R2){
-    if(R1->type!=R2->type)
-        return NOTCMP;
-    switch (R1->type)
-    {
-    case REG_INT32:
-        {
-            uint32_t intcmp = R1->value.i-R2->value.i;
-            if(intcmp==0)
-                return EQ;
-            else if(intcmp>0)
-                return GT;
-            else return LT;
-            break;
-        }
-    case REG_STRING:
-        {
-            int cmp = strcmp(R1->value.s,R2->value.s);
-            if(cmp==0)
-            return EQ;
-            else if(cmp>0)
-            return GT;
-            else return LT;
-            break;
-        }
-    case REG_BINARY :
-    #ifdef CMPBIN
-        if(R1->value.bin.nbytes==R2->value.bin.nbytes)
-        {
-            uint32_t len = R1->value.bin.nbytes;
-            for(uint32_t i = 0;i<len;i++)
-                if(R1->value.bin.bytes[i]!=R2->value.bin.bytes[i])
-                    return NE;
-            return EQ;
-        }
-        else{
-            uint32_t len = R1->value.bin.nbytes > R2->value.bin.nbytes ? \
-            R2->value.bin.nbytes:R1->value.bin.nbytes;
-            uint32_t i;
-            for(i = 0;i<len;i++)
-                if(R1->value.bin.bytes[i]!=R2->value.bin.bytes[i])
-                    return NE;
-            if(len==R1->value.bin.nbytes)
-                return GT;
-            else return LT;
-
-        }
-    #else
-        return NOTCMP;
-    #endif
-    default:
-        return NOTCMP;
-    }
-}
 int chidb_dbm_op_handle (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     return dbm_handlers[op->opcode].func(stmt, op);
@@ -149,12 +86,11 @@ int chidb_dbm_op_handle (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 /*** INSTRUCTION HANDLER IMPLEMENTATIONS ***/
 
-
 int chidb_dbm_op_Noop (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    //什么也不做
     return CHIDB_OK;
 }
+
 
 
 int chidb_dbm_op_OpenRead (chidb_stmt *stmt, chidb_dbm_op_t *op)
@@ -647,108 +583,171 @@ int chidb_dbm_op_Insert (chidb_stmt *stmt, chidb_dbm_op_t *op)
     return CHIDB_OK;
 }
 
-
 int chidb_dbm_op_Eq (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    uint32_t reg1 = op->p1;
-    uint32_t reg2 = op->p3;
-    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
-        return CHIDB_OK;
-    chidb_dbm_register_t R1 = stmt->reg[reg1];
-    chidb_dbm_register_t R2 = stmt->reg[reg2];
-    int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp==EQ)
-        stmt->pc = op->p2;
+    uint32_t jmp_addr = op->p2;
+
+    if (!IS_VALID_REGISTER(stmt, op->p1))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_REGISTER(stmt, op->p3))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_ADDRESS(stmt, jmp_addr))
+        return CHIDB_PROBLEM;
+
+    chidb_dbm_register_t *reg1 = &((stmt)->reg[op->p1]);
+    chidb_dbm_register_t *reg2 = &((stmt)->reg[op->p3]);
+
+    if(reg1->type == REG_INT32 && reg2->type == REG_INT32) {
+        if(reg2->value.i == reg1->value.i) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+    else if(reg1->type == REG_STRING && reg2->type == REG_STRING) {
+        if(!strncmp(reg2->value.s,reg1->value.s, strlen(reg2->value.s))) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+
     return CHIDB_OK;
 }
-
 
 int chidb_dbm_op_Ne (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
+    int32_t jmp_addr = op->p2;
 
-    uint32_t reg1 = op->p1;
-    uint32_t reg2 = op->p3;
-    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
-        return CHIDB_OK;
-    chidb_dbm_register_t R1 = stmt->reg[reg1];
-    chidb_dbm_register_t R2 = stmt->reg[reg2];
-    int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp!=EQ)
-        stmt->pc = op->p2;
+    if (!IS_VALID_REGISTER(stmt, op->p1))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_REGISTER(stmt, op->p3))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_ADDRESS(stmt, jmp_addr))
+        return CHIDB_PROBLEM;
+
+    chidb_dbm_register_t *reg1 = &((stmt)->reg[op->p1]);
+    chidb_dbm_register_t *reg2 = &((stmt)->reg[op->p3]);
+
+    if(reg1->type == REG_INT32 && reg2->type == REG_INT32) {
+        if(reg2->value.i != reg1->value.i) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+    else if(reg1->type == REG_STRING && reg2->type == REG_STRING) {
+        if(strncmp(reg2->value.s,reg1->value.s, strlen(reg2->value.s))) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+
     return CHIDB_OK;
 }
-
 
 int chidb_dbm_op_Lt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
+    uint32_t jmp_addr = op->p2;
 
-    uint32_t reg1 = op->p1;
-    uint32_t reg2 = op->p3;
-    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
-        return CHIDB_OK;
-    chidb_dbm_register_t R1 = stmt->reg[reg1];
-    chidb_dbm_register_t R2 = stmt->reg[reg2];
-    int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp==LT)
-        stmt->pc = op->p2;
+    if (!IS_VALID_REGISTER(stmt, op->p1))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_REGISTER(stmt, op->p3))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_ADDRESS(stmt, jmp_addr))
+        return CHIDB_PROBLEM;
+
+    chidb_dbm_register_t *reg1 = &((stmt)->reg[op->p1]);
+    chidb_dbm_register_t *reg2 = &((stmt)->reg[op->p3]);
+
+    if(reg1->type == REG_INT32 && reg2->type == REG_INT32) {
+        if(reg2->value.i < reg1->value.i) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+    else if(reg1->type == REG_STRING && reg2->type == REG_STRING) {
+        if(strncmp(reg2->value.s,reg1->value.s, strlen(reg2->value.s)) < 0) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+
     return CHIDB_OK;
 }
 
-
 int chidb_dbm_op_Le (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    uint32_t reg1 = op->p1;
-    uint32_t reg2 = op->p3;
-    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
-        return CHIDB_OK;
-    chidb_dbm_register_t R1 = stmt->reg[reg1];
-    chidb_dbm_register_t R2 = stmt->reg[reg2];
-    int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp==EQ||cmp==LT)
-        stmt->pc = op->p2;
+    uint32_t jmp_addr = op->p2;
+    chidb_dbm_register_t *reg1 = &((stmt)->reg[op->p1]);
+    chidb_dbm_register_t *reg2 = &((stmt)->reg[op->p3]);
+
+    if(reg1->type == REG_INT32 && reg2->type == REG_INT32) {
+        if(reg2->value.i <= reg1->value.i) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+    else if(reg1->type == REG_STRING && reg2->type == REG_STRING) {
+        if(strncmp(reg2->value.s,reg1->value.s, strlen(reg2->value.s)) <= 0) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+
     return CHIDB_OK;
 }
 
 
 int chidb_dbm_op_Gt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    uint32_t reg1 = op->p1;
-    uint32_t reg2 = op->p3;
-    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
-        return CHIDB_OK;
-    chidb_dbm_register_t R1 = stmt->reg[reg1];
-    chidb_dbm_register_t R2 = stmt->reg[reg2];
-    int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp==GT)
-        stmt->pc = op->p2;
+    int32_t r1 = op->p1;
+    int32_t r2 = op->p3;
+    int32_t jmp_addr = op->p2;
+
+    if (!IS_VALID_REGISTER(stmt, r1))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_REGISTER(stmt, r2))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_ADDRESS(stmt, jmp_addr))
+        return CHIDB_PROBLEM;
+
+    chidb_dbm_register_t *reg1 = &((stmt)->reg[r1]);
+    chidb_dbm_register_t *reg2 = &((stmt)->reg[r2]);
+
+
+    if(reg1->type == REG_INT32 && reg2->type == REG_INT32) {
+        if(reg2->value.i > reg1->value.i) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
+    else if(reg1->type == REG_STRING && reg2->type == REG_STRING) {
+        if(strcmp(reg2->value.s,reg1->value.s) > 0) {
+            stmt->pc = (uint32_t)jmp_addr;
+        }
+    }
 
     return CHIDB_OK;
 }
-
 
 int chidb_dbm_op_Ge (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    uint32_t reg1 = op->p1;
-    uint32_t reg2 = op->p3;
-    if(reg1>=stmt->nReg||reg2>=stmt->nReg)
-        return CHIDB_OK;
-    chidb_dbm_register_t R1 = stmt->reg[reg1];
-    chidb_dbm_register_t R2 = stmt->reg[reg2];
-    int cmp = cmp_reg_content(&R1,&R2);
-    if(cmp==EQ||cmp==GT)
-        stmt->pc = op->p2;
+    int32_t r1 = op->p1;
+    int32_t r2 = op->p3;
+    int32_t jmp_addr = op->p2;
+
+    if (!IS_VALID_REGISTER(stmt, r1))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_REGISTER(stmt, r2))
+        return CHIDB_PROBLEM;
+    if (!IS_VALID_ADDRESS(stmt, jmp_addr))
+        return CHIDB_PROBLEM;
+
+    chidb_dbm_register_t *reg1 = &((stmt)->reg[r1]);
+    chidb_dbm_register_t *reg2 = &((stmt)->reg[r2]);
+
+
+    if(reg1->type == REG_INT32 && reg2->type == REG_INT32) {
+        if((reg2->value.i >= reg1->value.i))
+            stmt->pc = (uint32_t)jmp_addr;
+    }
+    else if(reg1->type == REG_STRING && reg2->type == REG_STRING) {
+        if((strcmp(reg2->value.s,reg1->value.s) >= 0))
+            stmt->pc = (uint32_t)jmp_addr;
+    }
+
     return CHIDB_OK;
 }
 
-
-/* IdxGt p1 p2 p3 *
- *
- * p1: cursor
- * p2: jump addr
- * p3: register containing value k
- *
- * if (idxkey at cursor p1) > k, jump
- */
 int chidb_dbm_op_IdxGt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
     int32_t c_index = op->p1;
@@ -953,7 +952,6 @@ int chidb_dbm_op_SCopy (chidb_stmt *stmt, chidb_dbm_op_t *op)
 
 int chidb_dbm_op_Halt (chidb_stmt *stmt, chidb_dbm_op_t *op)
 {
-    exit(op->p1);
     return CHIDB_DONE;
 }
 

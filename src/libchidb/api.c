@@ -57,6 +57,8 @@ int chidb_stmt_optimize(chidb *db,
 			chisql_statement_t *sql_stmt,
 			chisql_statement_t **sql_stmt_opt);
 
+// --------- My Code Begin ---------
+
 // Step 1
 // 读取Schema表
 int load_schema(chidb *db, npage_t nroot)
@@ -153,6 +155,8 @@ int chidb_close(chidb *db)
     free(db);
     return CHIDB_OK;
 }
+
+// --------- My Code End ---------
 
 int chidb_prepare(chidb *db, const char *sql, chidb_stmt **stmt)
 {

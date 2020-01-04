@@ -33,6 +33,7 @@ typedef struct chidb chidb;
 #define CHIDB_EIO (7)
 #define CHIDB_EMISUSE (8)
 #define CHIDB_ECANTMOVE (9)
+#define CHIDB_PROBLEN (13)
 
 #define CHIDB_ROW (100)
 #define CHIDB_DONE (101)

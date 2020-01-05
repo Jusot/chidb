@@ -101,32 +101,32 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
         Op_String,
         5, // 字符串长度为5
         1, // 存储在寄存器1上
-        "table", // 类型为table
-        NULL)); // not used
+        0, // not used
+        "table")); // 类型为table
 
     // 存储名称
     list_append(ops, chidb_make_op(
         Op_String,
         strlen(create->table->name),
         2,
-        create->table->name,
-        NULL)); // not used
+        0, // not used
+        create->table->name));
 
     // 存储关联表名称, 因是创建table所以即是table的名称
     list_append(ops, chidb_make_op(
         Op_String,
         strlen(create->table->name),
         3,
-        create->table->name,
-        NULL)); // not used
+        0, // not used
+        create->table->name));
 
     // 存储sql语句
     list_append(ops, chidb_make_op(
         Op_String,
         strlen(text),
         5, // 在第五列
-        text,
-        NULL)); // not used
+        0, // not used
+        text)); //
 
     // 生成一行记录
     list_append(ops, chidb_make_op(
@@ -162,15 +162,156 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 
 }
 
+// Step 3
+// 完成insert语句的代码生成
 int chidb_insert_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t *ops)
 {
+    Insert_t *insert = sql_stmt->stmt.insert;
 
+    // 如果要插入的表不存在返回错误
+    char *table_name = sql_stmt->stmt.insert->table_name;
+    if (!chidb_check_table_exist(stmt->db->schema, table_name))
+    {
+        return CHIDB_EINVALIDSQL;
+    }
+
+    // 获取要插入的表的所有的列
+    list_t columns;
+    list_init(&columns);
+    chidb_get_columns_of_table(stmt->db->schema, table_name, columns);
+
+    // 遍历列, 检查每一列与对应的给定值类型是否匹配
+    list_iterator_start(&columns);
+    Literal_t *value = insert->values;
+    while (list_iterator_hasnext(&columns))
+    {
+        Column_t *column = (Column_t *)(list_iterator_next(&columns));
+        // 如果给定值的个数不符
+        if (value == NULL)
+        {
+            list_destroy(&columns);
+            return CHIDB_EINVALIDSQL;
+        }
+        // 如果当前值与对应列的类型不同, 返回错误
+        if (value->t != column->type)
+        {
+            list_destroy(&columns);
+            return CHIDB_EINVALIDSQL;
+        }
+    }
+    list_iterator_stop(&columns);
+
+    // 错误检查之后开始生成代码
+
+    int root_page = chidb_get_root_page_of_table(stmt->db->schema, table_name);
+    list_append(ops, chidb_make_op(
+        Op_Integer,
+        root_page, // 将要插入表所在的B树页码
+        0, // 存储在寄存器0上
+        0, NULL)); // not used
+
+    list_append(ops, chidb_make_op(
+        Op_OpenWrite, // 以读写模式打开表所在的根B树
+        0, // 游标0与之关联
+        0, // 寄存器0存储要打开的B树页码
+        list_size(&columns), // 要打开的表的列数
+        NULL)); // not used
+
+    // 生成一行记录
+    // 遍历值, 不断存储在连续的寄存器上
+    int reg = 1;
+    value = insert->values;
+    while (value != NULL)
+    {
+        // 根据不同的值类型生成不同的指令
+        switch (value->t)
+        {
+        case TYPE_INT:
+            list_append(ops, chidb_make_op(
+                Op_Integer,
+                value->val.ival,
+                reg,
+                0, NULL)); // not used
+            break;
+        case TYPE_TEXT:
+            list_append(ops, chidb_make_op(
+                Op_String,
+                strlen(value->val.strval),
+                reg,
+                0, // not used
+                value->val.strval));
+            break;
+
+        // 并没有Op_Double 和 Op_Char
+        case TYPE_DOUBLE:
+        case TYPE_CHAR:
+            break;
+        }
+        // 第一个值总为主键, 要在值后标记NULL
+        if (reg == 1)
+        {
+            list_append(ops, chidb_make_op(
+                Op_Null,
+                0, // not used
+                ++reg,
+                0, NULL)); // not used
+        }
+        ++reg;
+        value = value->next;
+    }
+
+    list_append(ops, chidb_make_op(
+        Op_MakeRecord,
+        2, // 从寄存器2存储的值开始
+        reg - 2, // 向后n个值的记录
+        reg, // 存储在最后一个可用的寄存器上
+        NULL)); // not used
+
+    list_append(ops, chidb_make_op(
+        Op_Insert,
+        0, // 将reg存储的记录插入到游标0关联的表上
+        reg, // 指定记录所在的寄存器
+        1, // 记录的key所在寄存器为1
+        NULL)); // not used
+
+    list_append(ops, chidb_make_op(
+        Op_Close,
+        0, // 关闭游标0关联的B树
+        0, 0, NULL)); // not used
+
+    list_destroy(&columns);
+    return CHIDB_OK;
 }
 
 int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
 {
+    // 如果之前执行了create table的指令, 则需要重新load schema
+    if (stmt->db->need_refresh == 1)
+    {
+        // 不断获取list中的第一个值并释放其中的指针指向的空间
+        while (!list_empty(&stmt->db->schema))
+        {
+            chidb_schema_item_t *item = (chidb_schema_item_t *)list_fetch(&stmt->db->schema);
+            chisql_statement_free(item->stmt);
+            free(item->type);
+            free(item->name);
+            free(item->assoc);
+            free(item);
+        }
+        // 释放list的空间
+        list_destroy(&stmt->db->schema);
+        // 重新初始化schema
+        list_init(&stmt->db->schema);
+        // 重新load schema
+        int load_schema(chidb *db, npage_t nroot);
+        load_schema(stmt->db, 1);
+        // 更新 need_refresh 为0
+        stmt->db->need_refresh = 0;
+    }
+
     list_t ops;
 
+    // 根据不同的语句调用不同的代码生成, 将指令添加到ops中
     int err = CHIDB_EINVALIDSQL;
     switch (sql_stmt->type)
     {
@@ -193,6 +334,12 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
 
     if (err)
     {
+        // 释放空间
+        while (!list_empty(&ops))
+        {
+            free(list_fetch(&ops));
+        }
+        list_destroy(&ops);
         return err;
     }
 
@@ -206,8 +353,17 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
     {
         chidb_dbm_op_t *op = (chidb_dbm_op_t *)(list_iterator_next(&ops));
         chidb_stmt_set_op(stmt, op, i++);
+        free(op);
     }
     list_iterator_stop(&ops);
+
+    // 释放空间
+    while (!list_empty(&ops))
+    {
+        free(list_fetch(&ops));
+    }
+    list_destroy(&ops);
+
 // --------- My Code End ---------
     /*
     int opnum = 0;

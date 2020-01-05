@@ -149,9 +149,9 @@ int chidb_close(chidb *db)
 		free(item->assoc);
 		free(item);
 	}
-
 	// 释放list的空间
 	list_destroy(&db->schema);
+
     free(db);
     return CHIDB_OK;
 }

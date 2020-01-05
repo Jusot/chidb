@@ -406,6 +406,38 @@ int chidb_get_type_of_column(chidb_schema_t schema, char *table, char *column)
     return -1;
 }
 
+int chidb_get_columns_of_table(chidb_schema_t schema, char *table, list_t columns)
+{
+    // 初始化迭代器
+    list_iterator_start(&schema);
+
+    // 遍历schema每一项
+    while (list_iterator_hasnext(&schema))
+    {
+        // 获取当前项的指针
+        chidb_schema_item_t *item = (chidb_schema_item_t *)(list_iterator_next(&schema));
+        // name 与 table相等则获取其中的列后返回
+        if (!strcmp(item->name, table))
+        {
+            // 遍历列, 添加到列名列表中
+            Column_t *column = item->stmt->stmt.create->table->columns;
+            while (column != NULL)
+            {
+                list_append(&columns, column);
+                column = column->next;
+            }
+
+            list_iterator_stop(&schema);
+            return CHIDB_OK;
+        }
+    }
+
+    // 结束迭代器
+    list_iterator_stop(&schema);
+    // 不存在返回错误
+    return CHIDB_EINVALIDSQL;
+}
+
 void chisql_statement_free(chisql_statement_t *sql_stmt)
 {
     switch (sql_stmt->type)

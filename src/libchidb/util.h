@@ -85,6 +85,9 @@ int chidb_check_column_exist(chidb_schema_t schema, char *table, char *column);
 // 获取给定table中给定column的类型, 不存在则返回-1
 int chidb_get_type_of_column(chidb_schema_t schema, char *table, char *column);
 
+// 根据给定的表名获取其所有的列
+int chidb_get_columns_of_table(chidb_schema_t schema, char *table, list_t columns);
+
 void chisql_statement_free(chisql_statement_t *sql_stmt);
 // --------- My Code End ---------
 #endif /*UTIL_H_*/

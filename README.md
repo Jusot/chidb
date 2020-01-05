@@ -56,13 +56,13 @@ make check
 
 + [x] src/libchidb/chidbInt.h
 + [x] src/libchidb/api.c
-+ [ ] src/libchidb/utils.\[hc\]
-+ [ ] src/libchidb/codegen.c
++ [x] src/libchidb/utils.\[hc\]
++ [x] src/libchidb/codegen.c
 
 #### Steps
 
 + [x] Step 1: Schema Loading
-+ [ ] Step 2: Simple SELECT Code Generation
++ [x] Step 2: Simple SELECT Code Generation
 + [x] Step 3: INSERT Code Generation
 + [x] Step 4: CREATE TABLE Code Generation
 + [ ] Step 5: NATURAL JOIN Code Generation

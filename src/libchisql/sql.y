@@ -60,7 +60,7 @@ chisql_statement_t *__stmt;
 
 %type <ival> column_type bool_op comp_op select_combo
 %type <ival> function_name opt_distinct join opt_unique
-%type <strval> column_name table_name opt_alias 
+%type <strval> column_name table_name opt_alias
 %type <strval> index_name column_name_or_star
 %type <slist> column_names_list opt_column_names
 %type <constr> opt_constraints constraints constraint
@@ -110,9 +110,9 @@ create
 
 create_index
         : CREATE opt_unique INDEX index_name ON table_name '(' column_name ')'
-		{ 
-			$$ = Index_make($4, $6, $8); 
-		  	if ($2 == UNIQUE) $$ = Index_makeUnique($$); 
+		{
+			$$ = Index_make($4, $6, $8);
+		  	if ($2 == UNIQUE) $$ = Index_makeUnique($$);
 		}
 	;
 
@@ -126,7 +126,7 @@ index_name
 	;
 
 create_table
-	: CREATE TABLE table_name '(' column_dec_list opt_key_dec_list ')' 
+	: CREATE TABLE table_name '(' column_dec_list opt_key_dec_list ')'
 		{
 			$$ = Table_make($3, $5, $6);
 		}
@@ -138,8 +138,8 @@ column_dec_list
 	;
 
 column_dec
-	: column_name column_type opt_constraints 
-		{ 
+	: column_name column_type opt_constraints
+		{
 			/*printf("column '%s' (%d)\n", $1, $2);*/
 			$$ = Column($1, $2, $3);
 		}
@@ -151,8 +151,8 @@ column_type
 	| CHAR 			{ $$ = TYPE_CHAR; }
 	| VARCHAR 		{ $$ = TYPE_TEXT; }
 	| TEXT 			{ $$ = TYPE_TEXT; }
-	| column_type '(' INT_LITERAL ')' 
-		{ 
+	| column_type '(' INT_LITERAL ')'
+		{
 			$$ = $1;
 			if ($3 <= 0) {
 				fprintf(stderr, "Error: sizes must be greater than 0 (line %d).\n", yylineno);
@@ -173,9 +173,9 @@ key_dec_list
 	;
 
 key_dec
-	: PRIMARY KEY '(' column_names_list ')' 
+	: PRIMARY KEY '(' column_names_list ')'
 		{ $$ = PrimaryKeyDec($4); }
-	| FOREIGN KEY '(' column_name ')' references_stmt 
+	| FOREIGN KEY '(' column_name ')' references_stmt
 		{$$ = ForeignKeyDec(ForeignKeyRef_makeFull($4, $6)); }
 
 references_stmt
@@ -189,13 +189,13 @@ opt_constraints
 	;
 
 constraints
-	: constraint { $$ = Constraint_append(NULL, $1); 
+	: constraint { $$ = Constraint_append(NULL, $1);
 						/*printf("new constraint:");
 						Constraint_print($1);
 						printf("created a vector of constraints\n");
 						Constraint_printList($$);*/
 					 }
-	| constraint constraints { $$ = Constraint_append($2, $1); 
+	| constraint constraints { $$ = Constraint_append($2, $1);
 										/*printf("appended a constraint\n");
 										Constraint_printList($$);*/
 									}
@@ -213,8 +213,8 @@ constraint
 
 select
 	: select_statement
-	| select select_combo select_statement 
-		{ 
+	| select select_combo select_statement
+		{
 			$$ = ($2 == UNION) ? SRAUnion($1, $3) :
 				  ($2 == INTERSECT) ? SRAIntersect($1, $3) :
 				  SRAExcept($1, $3);
@@ -230,12 +230,12 @@ select_combo
 select_statement
 	: SELECT opt_distinct expression_list FROM table opt_where_condition opt_options
 		{
-			if ($6 != NULL) 
+			if ($6 != NULL)
 				$$ = SRAProject(SRASelect($5, $6), $3);
 			else
 				$$ = SRAProject($5, $3);
 			if ($7 != NULL)
-				$$ = SRA_applyOption($$, $7); 
+				$$ = SRA_applyOption($$, $7);
 			if ($2 == DISTINCT)
 				$$ = SRA_makeDistinct($$);
 		}
@@ -265,7 +265,7 @@ where_condition
 	;
 
 group_by
-	: GROUP BY expression { $$ = GroupBy_make($3); } 		
+	: GROUP BY expression { $$ = GroupBy_make($3); }
 	;
 
 order_by
@@ -276,21 +276,21 @@ order_by
 
 condition
    : bool_term { $$ = $1; /*printf("Found condition: \n"); Condition_print($$); puts(""); */}
-   | bool_term bool_op condition 
-   	{ 
-   		$$ = ($2 == AND) ? And($1, $3) : Or($1, $3); 
+   | bool_term bool_op condition
+   	{
+   		$$ = ($2 == AND) ? And($1, $3) : Or($1, $3);
    		/* printf("Found condition: \n"); Condition_print($$); puts(""); */
    	}
    ;
 
 bool_term
-   : expression comp_op expression 
+   : expression comp_op expression
    	{
    		$$ = ($2 == '=') ? Eq($1, $3) :
    			  ($2 == '>') ? Gt($1, $3) :
    			  ($2 == '<') ? Lt($1, $3) :
-   			  ($2 == GEQ) ? Leq($1, $3) :
-   			  ($2 == LEQ) ? Geq($1, $3) :
+   			  ($2 == GEQ) ? Geq($1, $3) :
+   			  ($2 == LEQ) ? Leq($1, $3) :
    			  Not(Eq($1, $3));
    	}
    | expression in_statement { $$ = In($1, $2); }
@@ -307,17 +307,17 @@ in_statement
    ;
 
 bool_op
-	: AND { $$ = AND; } 
+	: AND { $$ = AND; }
 	| OR { $$ = OR; }
 	;
 
 comp_op
-	: '=' { $$ = '='; } 
-	| '>' { $$ = '>'; } 
-	| '<' { $$ = '<'; } 
-	| GEQ { $$ = GEQ; } 
-	| LEQ { $$ = LEQ; } 
-	| NEQ { $$ = NEQ; } 
+	: '=' { $$ = '='; }
+	| '>' { $$ = '>'; }
+	| '<' { $$ = '<'; }
+	| GEQ { $$ = GEQ; }
+	| LEQ { $$ = LEQ; }
+	| NEQ { $$ = NEQ; }
 	;
 
 expression_list
@@ -341,7 +341,7 @@ mulexp
 primary
 	: '(' expression ')' 	{ $$ = $2; }
 	| '-' primary 				{ $$ = Neg($2); }
-	| term 						{ $$ = $1; } 
+	| term 						{ $$ = $1; }
 	;
 
 term
@@ -391,9 +391,9 @@ table
 		{
 			switch ($2) {
 				case SRA_NATURAL_JOIN:
-					$$ = SRANaturalJoin($1, SRATable($3)); 
+					$$ = SRANaturalJoin($1, SRATable($3));
 					if ($4) {
-						fprintf(stderr, 
+						fprintf(stderr,
 								  "Line %d: WARNING: a NATURAL join cannot have an ON "
 								  "or USING clause. This will be ignored.\n", yylineno);
 					}
@@ -458,9 +458,9 @@ column_names_list
 
 values_list
 	: literal_value
-	| values_list ',' literal_value 
-		{ 
-			$$ = Literal_append($1, $3); 
+	| values_list ',' literal_value
+		{
+			$$ = Literal_append($1, $3);
 
 		}
 	;
@@ -527,14 +527,14 @@ char *__sql_semicolon(const char *sql)
 int chisql_parser(const char *sql, chisql_statement_t **stmt)
 {
   int rc;
-  
+
   __stmt = malloc(sizeof(chisql_statement_t));
   char *tsql = __sql_semicolon(sql);
-    
+
   YY_BUFFER_STATE my_string_buffer = yy_scan_string (tsql);
   rc = yyparse();
   yy_delete_buffer (my_string_buffer);
-  
+
   if (rc == 0) {
     __stmt->text = tsql; /* strdup(sql); */
     *stmt = __stmt;

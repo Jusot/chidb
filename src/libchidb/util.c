@@ -343,7 +343,7 @@ int chidb_check_column_exist(chidb_schema_t schema, char *table, char *column)
     while (list_iterator_hasnext(&schema))
     {
         // 获取当前项的指针
-        chidb_schema_item_t *item = (chidb_schema_item_t *)(list_iterator_next(&schema));
+        chidb_schema_item_t *item = list_iterator_next(&schema);
         // name 与 table相等则在其中查找
         if (!strcmp(item->name, table))
         {
@@ -358,6 +358,7 @@ int chidb_check_column_exist(chidb_schema_t schema, char *table, char *column)
                     return 1;
                 }
                 // 若不同则更新当前列指针指向下一列
+                cur_column = cur_column->next;
             }
             // 不存在返回0
             list_iterator_stop(&schema);
@@ -394,6 +395,7 @@ int chidb_get_type_of_column(chidb_schema_t schema, char *table, char *column)
                     return cur_column->type;
                 }
                 // 若不同则更新当前列指针指向下一列
+                cur_column = cur_column->next;
             }
             // 不存在返回-1
             list_iterator_stop(&schema);

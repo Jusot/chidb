@@ -242,13 +242,13 @@ int chidb_dbm_cursorTable_fwd(BTree *bt, chidb_dbm_cursor_t *c)
     if(c->current_cell.type != PGTYPE_TABLE_LEAF)
         return CHIDB_ETYPE;
 
-    if(ct->n_current_cell == ct->btn->n_cells - 1) 
+    if(ct->n_current_cell == ct->btn->n_cells - 1)
     {
         chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
         return chidb_dbm_cursorTable_fwdUp(bt, c);
     }
-    else 
+    else
     {
         ct->n_current_cell++;
         chidb_Btree_getCell(ct->btn, ct->n_current_cell, &(c->current_cell));
@@ -275,19 +275,19 @@ int chidb_dbm_cursorTable_fwdUp(BTree *bt, chidb_dbm_cursor_t *c)
         return CHIDB_ETYPE;
     }
 
-    ct->n_current_cell++; 
+    ct->n_current_cell++;
 
     if(ct->n_current_cell <= ct->btn->n_cells)
     {
-       
+
         return chidb_dbm_cursorTable_fwdDwn(bt,c);
     }
     else
     {
-        
+
         chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-    
+
         return chidb_dbm_cursorTable_fwdUp(bt, c);
     }
 
@@ -319,7 +319,7 @@ int chidb_dbm_cursorTable_fwdDwn(BTree *bt, chidb_dbm_cursor_t *c)
 
             chidb_dbm_cursor_trail_t *ct_new;
             uint32_t next_depth = list_loc + 1;
-            chidb_dbm_cursor_trail_new(bt, &ct_new, pg, next_depth); 
+            chidb_dbm_cursor_trail_new(bt, &ct_new, pg, next_depth);
 
             list_insert_at(&(c->trail), ct_new, next_depth);
 
@@ -346,15 +346,15 @@ int chidb_dbm_cursorIndex_fwd(BTree *bt, chidb_dbm_cursor_t *c)
     switch(node_type)
     {
         case PGTYPE_INDEX_LEAF:
-            if(ct->n_current_cell == ct->btn->n_cells - 1) 
+            if(ct->n_current_cell == ct->btn->n_cells - 1)
             {
-                
+
                 chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-            
+
                 return chidb_dbm_cursorIndex_fwdUp(bt, c);
             }
-            else 
+            else
             {
                 ct->n_current_cell++;
                 chidb_Btree_getCell(ct->btn, ct->n_current_cell, &(c->current_cell));
@@ -362,19 +362,19 @@ int chidb_dbm_cursorIndex_fwd(BTree *bt, chidb_dbm_cursor_t *c)
                 return CHIDB_OK;
             }
         case PGTYPE_INDEX_INTERNAL:
-            
+
             ct->n_current_cell++;
             if(ct->n_current_cell <= ct->btn->n_cells)
             {
-               
+
                 return chidb_dbm_cursorIndex_fwdDwn(bt,c);
             }
-            else 
+            else
             {
-                
+
                 chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-                
+
                 return chidb_dbm_cursorIndex_fwdUp(bt, c);
             }
     }
@@ -393,11 +393,11 @@ int chidb_dbm_cursorIndex_fwdUp(BTree *bt, chidb_dbm_cursor_t *c)
 
     chidb_dbm_cursor_trail_t *ct = list_get_at(&(c->trail), list_loc);
 
-    ct->n_current_cell++; 
+    ct->n_current_cell++;
 
     if(ct->n_current_cell < ct->btn->n_cells)
     {
-       
+
         BTreeCell cell;
         chidb_Btree_getCell(ct->btn, ct->n_current_cell, &cell);
 
@@ -405,15 +405,15 @@ int chidb_dbm_cursorIndex_fwdUp(BTree *bt, chidb_dbm_cursor_t *c)
     }
     else if(ct->n_current_cell == ct->btn->n_cells)
     {
-   
+
         return chidb_dbm_cursorIndex_fwdDwn(bt,c);
     }
-    else 
+    else
     {
-        
+
         chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-        
+
         return chidb_dbm_cursorIndex_fwdUp(bt, c);
     }
 
@@ -446,7 +446,7 @@ int chidb_dbm_cursorIndex_fwdDwn(BTree *bt, chidb_dbm_cursor_t *c)
 
             chidb_dbm_cursor_trail_t *ct_new;
             uint32_t next_depth = list_loc + 1;
-            chidb_dbm_cursor_trail_new(bt, &ct_new, pg, next_depth); 
+            chidb_dbm_cursor_trail_new(bt, &ct_new, pg, next_depth);
 
             list_insert_at(&(c->trail), ct_new, next_depth);
 
@@ -513,14 +513,14 @@ int chidb_dbm_cursorTable_rev(BTree *bt, chidb_dbm_cursor_t *c)
     if(c->current_cell.type != PGTYPE_TABLE_LEAF)
         return CHIDB_ETYPE;
 
-    if(ct->n_current_cell == 0) 
+    if(ct->n_current_cell == 0)
     {
-        
+
         chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
         return chidb_dbm_cursorTable_revUp(bt, c);
     }
-    else 
+    else
     {
         ct->n_current_cell--;
         chidb_Btree_getCell(ct->btn, ct->n_current_cell, &(c->current_cell));
@@ -547,7 +547,7 @@ int chidb_dbm_cursorTable_revUp(BTree *bt, chidb_dbm_cursor_t *c)
         return CHIDB_ETYPE;
     }
 
-    ct->n_current_cell--; 
+    ct->n_current_cell--;
 
     if(ct->n_current_cell >= 0)
     {
@@ -592,11 +592,11 @@ int chidb_dbm_cursorTable_revDwn(BTree *bt, chidb_dbm_cursor_t *c)
 
             ct_new->n_current_cell = ct_new->btn->n_cells;
 
-           
+
             if(ct_new->btn->type == PGTYPE_TABLE_LEAF)
                 ct_new->n_current_cell--;
 
-  
+
             list_insert_at(&(c->trail), ct_new, next_depth);
 
 
@@ -624,16 +624,16 @@ int chidb_dbm_cursorIndex_rev(BTree *bt, chidb_dbm_cursor_t *c)
     switch(node_type)
     {
         case PGTYPE_INDEX_LEAF:
-   
-            if(ct->n_current_cell == 0) 
+
+            if(ct->n_current_cell == 0)
             {
-             
+
                 chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-                
+
                 return chidb_dbm_cursorIndex_revUp(bt, c);
             }
-            else 
+            else
             {
                 ct->n_current_cell--;
                 chidb_Btree_getCell(ct->btn, ct->n_current_cell, &(c->current_cell));
@@ -641,18 +641,18 @@ int chidb_dbm_cursorIndex_rev(BTree *bt, chidb_dbm_cursor_t *c)
                 return CHIDB_OK;
             }
         case PGTYPE_INDEX_INTERNAL:
-          
+
             if(ct->n_current_cell >= 0)
             {
-              
+
                 return chidb_dbm_cursorIndex_revDwn(bt,c);
             }
-            else 
+            else
             {
-               
+
                 chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-               
+
                 return chidb_dbm_cursorIndex_revUp(bt, c);
             }
     }
@@ -672,22 +672,22 @@ int chidb_dbm_cursorIndex_revUp(BTree *bt, chidb_dbm_cursor_t *c)
 
     chidb_dbm_cursor_trail_t *ct = list_get_at(&(c->trail), list_loc);
 
-    ct->n_current_cell--; 
+    ct->n_current_cell--;
 
     if(ct->n_current_cell >= 0)
     {
-      
+
         BTreeCell cell;
         chidb_Btree_getCell(ct->btn, ct->n_current_cell, &cell);
 
         return CHIDB_OK;
     }
-    else 
+    else
     {
-       
+
         chidb_dbm_cursor_trail_remove_at(bt, c, list_loc);
 
-     
+
         return chidb_dbm_cursorIndex_fwdUp(bt, c);
     }
 
@@ -707,28 +707,28 @@ int chidb_dbm_cursorIndex_revDwn(BTree *bt, chidb_dbm_cursor_t *c)
         case PGTYPE_INDEX_INTERNAL:
             if(ct->n_current_cell >= 0)
             {
-              
+
                 BTreeCell cell;
                 chidb_Btree_getCell(ct->btn, ct->n_current_cell, &cell);
                 pg = cell.fields.indexInternal.child_page;
             }
             else if(ct->n_current_cell == ct->btn->n_cells)
             {
-              
+
                 pg = ct->btn->right_page;
             }
             else
                 return CHIDB_ECELLNO;
 
-   
+
             chidb_dbm_cursor_trail_t *ct_new;
             uint32_t next_depth = list_loc + 1;
             chidb_dbm_cursor_trail_new(bt, &ct_new, pg, next_depth);
 
-         
+
             ct_new->n_current_cell = ct_new->btn->n_cells;
 
-       
+
             if(ct_new->btn->type == PGTYPE_TABLE_LEAF)
                 ct_new->n_current_cell--;
 
@@ -754,14 +754,14 @@ int chidb_dbm_cursorIndex_revDwn(BTree *bt, chidb_dbm_cursor_t *c)
 
 
 */
-chidb_dbm_cursor_seek(BTree *bt, chidb_dbm_cursor_t *c, chidb_key_t key, npage_t next, int depth, int seek_type)
+int chidb_dbm_cursor_seek(BTree *bt, chidb_dbm_cursor_t *c, chidb_key_t key, npage_t next, int depth, int seek_type)
 {
     chidb_dbm_cursor_trail_t *trail_entry;
 
     if (!depth)
     {
         chidb_dbm_cursor_clear_trail_from(bt, c, 0);
-        next = c->root_page; 
+        next = c->root_page;
         trail_entry = list_get_at(&(c->trail), 0);
     }
     else
@@ -873,7 +873,7 @@ chidb_dbm_cursor_seek(BTree *bt, chidb_dbm_cursor_t *c, chidb_key_t key, npage_t
             if (chidb_Btree_getCell(btn, i, &cell) != CHIDB_OK)
                 return CHIDB_ECELLNO;
 
-            if (cell.key == key) 
+            if (cell.key == key)
             {
                 trail_entry->n_current_cell = i;
                 c->current_cell = cell;
@@ -925,5 +925,5 @@ chidb_dbm_cursor_seek(BTree *bt, chidb_dbm_cursor_t *c, chidb_key_t key, npage_t
             return CHIDB_CURSORCANTMOVE;
     }
 
-    return CHIDB_OK; 
+    return CHIDB_OK;
 }

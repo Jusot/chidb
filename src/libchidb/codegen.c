@@ -158,9 +158,10 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 // Step 2
 // 完成select语句的代码生成
 // from -> where -> select -> order by
+// 递归实现
 int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t *ops)
 {
-    SRA_t *select = sql_stmt->stmt.select;
+    SRA_print(sql_stmt->stmt.select);
     return CHIDB_OK;
 }
 

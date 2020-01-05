@@ -46,7 +46,9 @@ make check
 
 ### Assignment 2
 
-+ [ ] src/libchidb/dbm-cursor.\[hc\]
++ [x] src/libchidb/dbm.c
++ [x] src/libchidb/dbm-ops.c
++ [x] src/libchidb/dbm-cursor.\[hc\]
 
 ### Assignment 3
 
@@ -61,7 +63,7 @@ make check
 
 + [x] Step 1: Schema Loading
 + [ ] Step 2: Simple SELECT Code Generation
-+ [ ] Step 3: INSERT Code Generation
++ [x] Step 3: INSERT Code Generation
 + [x] Step 4: CREATE TABLE Code Generation
 + [ ] Step 5: NATURAL JOIN Code Generation
 

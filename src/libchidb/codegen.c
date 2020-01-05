@@ -155,9 +155,13 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     return CHIDB_OK;
 }
 
+// Step 2
+// 完成select语句的代码生成
+// from -> where -> select -> order by
 int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t *ops)
 {
-    return CHIDB_EINVALIDSQL;
+    SRA_t *select = sql_stmt->stmt.select;
+    return CHIDB_OK;
 }
 
 // Step 3
@@ -354,6 +358,7 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
     {
         chidb_dbm_op_t *op = (chidb_dbm_op_t *)(list_iterator_next(&ops));
         chidb_stmt_set_op(stmt, op, i++);
+        // 添加之后的指令可以删除, 因为set op中是memcpy
         free(op);
     }
     list_iterator_stop(&ops);

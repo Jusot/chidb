@@ -159,66 +159,214 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 // 完成select语句的代码生成
 /*
 Project([altcode],
-	Select(code = int 9985,
-		Table(numbers)
-	)
-)
-Project([altcode],
-	Select(code > int 9985,
-		Table(numbers)
-	)
-)
-Project([altcode],
-	Select(code = int 9984,
-		Table(numbers)
-	)
-)Project([name],
-	Select(dept = int 89,
-		Table(courses)
-	)
-)
-Project([altcode],
-	Select(code <= int 100000,
-		Table(numbers)
-	)
+        Select(code = int 9985,
+                Table(numbers)
+        )
 )Project([altcode],
-	Select(code <= int 9985,
-		Table(numbers)
-	)
-)
-Project([code],
-	Select(altcode > int 9980,
-		Table(numbers)
-	)
-)
-Project([altcode],
-	Select(code > int 9980,
-		Table(numbers)
-	)
-)
-Project([*],
-	Table(courses)
-)
-Project([altcode],
-	Select(code <= int 9980,
-		Table(numbers)
-	)
-)
-Project([altcode],
-	Select(code > int 100000,
-		Table(numbers)
-	)
-)
+        Select(code > int 9985,
+                Table(numbers)
+        )
+)Project([altcode],
+        Select(code = int 9984,
+                Table(numbers)
+        )
+)Project([name],
+        Select(dept = int 89,
+                Table(courses)
+        )
+)Project([altcode],
+        Select(code >= int 100000,
+                Table(numbers)
+        )
+)Project([altcode],
+        Select(code >= int 9985,
+                Table(numbers)
+        )
+)Project([code],
+        Select(altcode > int 9980,
+                Table(numbers)
+        )
+)Project([altcode],
+        Select(code > int 9980,
+                Table(numbers)
+        )
+)Project([*],
+        Table(courses)
+)Project([altcode],
+        Select(code >= int 9980,
+                Table(numbers)
+        )
+)Project([altcode],
+        Select(code > int 100000,
+                Table(numbers)
+        )
 */
 // from -> where -> select
+
+// 获取列在表中所有列的位置, 从0开始
+int order_of_column(list_t *columns, char *name);
+
+// 如果next_to置为-1, 则无需next指令
+int chidb_cond_codegen(chidb_stmt *stmt,
+    SRA_Select_t *select, chidb_dbm_op_t **cmp_op,
+    list_t *ops, int *reg, int *next_to, int *after_next)
+{
+    // 错误检查
+    // 3. 检查要比较的值和对应的列的类型相同
+    Condition_t *cond = select->cond;
+    char *table_name = select->sra->table.ref->table_name;
+    char *cond_column_name = cond->cond.comp.expr1->expr.term.ref->columnName;
+    enum data_type column_type = chidb_get_type_of_column(stmt->db->schema, table_name, cond_column_name);
+    Literal_t *value = cond->cond.comp.expr2->expr.term.val;
+    if (column_type != value->t)
+    {
+        return CHIDB_EINVALIDSQL;
+    }
+
+    // 代码生成
+
+    switch (value->t)
+    {
+    case TYPE_INT:
+        list_append(ops, chidb_make_op(
+            Op_Integer,
+            value->val.ival,
+            (*reg)++, // 存储在寄存器1上
+            0, NULL)); // not used
+        break;
+    case TYPE_TEXT:
+        list_append(ops, chidb_make_op(
+            Op_String,
+            strlen(value->val.strval),
+            (*reg)++, // 存储在寄存器1上
+            0, // not used
+            value->val.strval));
+        break;
+
+    // 并没有Op_Double 和 Op_Char
+    default:
+        break;
+    }
+
+    list_t columns;
+    list_init(&columns);
+    chidb_get_columns_of_table(stmt->db->schema, table_name, &columns);
+
+    int column_num = order_of_column(&columns, cond_column_name);
+
+    // 如果可以直接查找主键时, 生成Seek指令
+    if (column_num == 0)
+    {
+        opcode_t cond_op;
+        switch (cond->t)
+        {
+        case RA_COND_EQ:
+            cond_op = Op_Seek;
+            break;
+        case RA_COND_LT:
+            cond_op = Op_SeekLt;
+            break;
+        case RA_COND_GT:
+            cond_op = Op_SeekGt;
+            break;
+        case RA_COND_LEQ:
+            cond_op = Op_SeekLe;
+            break;
+        case RA_COND_GEQ:
+            cond_op = Op_SeekGe;
+            break;
+        default:
+            return CHIDB_EINVALIDSQL;
+        }
+
+        *cmp_op = chidb_make_op(
+            cond_op,
+            0, // 在游标0关联的B树上查找
+            0, // 占位, 查找失败时跳转到结尾
+            *reg - 1,
+            NULL); // not used
+        list_append(ops, *cmp_op);
+
+        // 如果是Seek则不需要Next
+        if (cond->t == RA_COND_EQ)
+        {
+            *next_to = -1;
+        }
+        // 否则需要next跳转到下一条指令
+        // 同时若查找失败则跳转到next之后
+        else
+        {
+            *next_to = list_size(ops);
+            *after_next = 1;
+        }
+
+        list_destroy(&columns);
+        return CHIDB_OK;
+    }
+
+    // 不是主键是则通过获取列的操作
+    *next_to = list_size(ops);
+    list_append(ops, chidb_make_op(
+        Op_Column,
+        0, // 读取游标0关联的表的列
+        column_num,
+        (*reg)++, // 存储在寄存器2上
+        NULL));
+
+    // 因为比较成功时跳转, 所以运算符相反, 所以> -> <=
+    opcode_t cond_op;
+    switch (cond->t)
+    {
+    case RA_COND_EQ:
+        cond_op = Op_Ne;
+        break;
+    case RA_COND_LT:
+        cond_op = Op_Ge;
+        break;
+    case RA_COND_GT:
+        cond_op = Op_Le;
+        break;
+    case RA_COND_LEQ:
+        cond_op = Op_Gt;
+        break;
+    case RA_COND_GEQ:
+        cond_op = Op_Lt;
+        break;
+
+    default:
+        return CHIDB_EINVALIDSQL;
+    }
+    *cmp_op = chidb_make_op(
+        cond_op,
+        1, // 比较寄存器1存储的值与
+        0, // 占位, 比较成功时跳转
+        2, // 寄存器2存储的值比较,  p3 <= p1
+        NULL);
+    list_append(ops, *cmp_op);
+
+    list_destroy(&columns);
+    return CHIDB_OK;
+}
+
 int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t *ops)
 {
-    // 获取列在表中所有列的位置, 从0开始
-    int order_of_column(list_t *columns, char *name);
-
     SRA_Project_t *project = &sql_stmt->stmt.select->project;
-    SRA_Select_t  *select = &project->sra->select;
-    SRA_Table_t   *table = &select->sra->table;
+    SRA_Select_t  *select  = NULL;
+    SRA_Table_t   *table   = NULL;
+
+    if (project->sra->t == SRA_SELECT)
+    {
+        select = &project->sra->select;
+    }
+
+    if (select == NULL)
+    {
+        table = &project->sra->table;
+    }
+    else
+    {
+        table = &select->sra->table;
+    }
 
     // 错误检查
 
@@ -232,7 +380,7 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     // 先获取表里所有的列
     list_t columns;
     list_init(&columns);
-    chidb_get_columns_of_table(stmt->db->schema, table_name, columns);
+    chidb_get_columns_of_table(stmt->db->schema, table_name, &columns);
 
     // 2. 遍历要返回的列名是否存在, 存在则添加到column_names, 不存在则返回错误
     list_t select_names;
@@ -265,22 +413,14 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
         expr = expr->next;
     }
 
-    // 3. 检查要比较的值和对应的列的类型相同
-    Condition_t *cond = select->cond;
-    char *cond_column_name = cond->cond.comp.expr1->expr.term.ref->columnName;
-    enum data_type column_type = chidb_get_type_of_column(stmt->db->schema, table_name, cond_column_name);
-    Literal_t *value = cond->cond.comp.expr2->expr.term.val;
-    if (column_type != value->t)
-    {
-        return CHIDB_EINVALIDSQL;
-    }
-
     // 具体的代码生成
+
+    int reg = 0;
 
     list_append(ops, chidb_make_op(
         Op_Integer,
         chidb_get_root_page_of_table(stmt->db->schema, table_name),
-        0, // 将root page存储在寄存器0上
+        reg++, // 将root page存储在寄存器0上
         0, NULL)); // not used
 
     list_append(ops, chidb_make_op(
@@ -297,85 +437,27 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
         0, NULL);
     list_append(ops, rewind);
 
-    switch (value->t)
+    int next_to;
+    int after_next = 0;
+    chidb_dbm_op_t *cmp_op;
+    if (select != NULL)
     {
-    case TYPE_INT:
-        list_append(ops, chidb_make_op(
-            Op_Integer,
-            value->val.ival,
-            1, // 存储在寄存器1上
-            0, NULL)); // not used
-        break;
-    case TYPE_TEXT:
-        list_append(ops, chidb_make_op(
-            Op_String,
-            strlen(value->val.strval),
-            1, // 存储在寄存器1上
-            0, // not used
-            value->val.strval));
-        break;
-
-    // 并没有Op_Double 和 Op_Char
-    case TYPE_DOUBLE:
-    case TYPE_CHAR:
-        break;
+        int err = chidb_cond_codegen(stmt, select, &cmp_op, ops, &reg, &next_to, &after_next);
+        if (err)
+        {
+            return err;
+        }
     }
-
-    // Next 指令会跳转到这里
-    int next_to = list_size(ops);
-
-    int column_num = order_of_column(&columns, cond_column_name);
-    if (column_num == 0)
-    {
-        list_append(ops, chidb_make_op(
-            Op_Key,
-            0, // 读取游标0关联的表的Key
-            2, // 存储在寄存器2上
-            0, NULL));
-    }
+    // 没有where的话next直接跳转到这里
     else
     {
-        list_append(ops, chidb_make_op(
-            Op_Column,
-            0, // 读取游标0关联的表的列
-            column_num,
-            2, // 存储在寄存器2上
-            NULL));
+        // Next 指令会跳转到这里
+        next_to = list_size(ops);
     }
 
-    // 比较时是相反的, 所以> -> <=
-    opcode_t cond_op;
-    switch (cond->t)
-    {
-    case RA_COND_EQ:
-        cond_op = Op_Eq;
-        break;
-    case RA_COND_LT:
-        cond_op = Op_Ge;
-        break;
-    case RA_COND_GT:
-        cond_op = Op_Le;
-        break;
-    case RA_COND_LEQ:
-        cond_op = Op_Gt;
-        break;
-    case RA_COND_GEQ:
-        cond_op = Op_Lt;
-        break;
-
-    default:
-        return CHIDB_EINVALIDSQL;
-    }
-    chidb_dbm_op_t *cmp_op = chidb_make_op(
-        cond_op,
-        2, // 比较寄存器2存储的值与
-        0, // 占位, 比较失败时跳转
-        1, // 寄存器1存储的值比较
-        NULL);
-    list_append(ops, cmp_op);
+    int startRR = reg;
 
     // 将要获取的列连续生成Column指令
-    int reg = 3;
     list_iterator_start(&select_names);
     while (list_iterator_hasnext(&select_names))
     {
@@ -403,18 +485,26 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 
     list_append(ops, chidb_make_op(
         Op_ResultRow,
-        3, // 从寄存器3开始
-        reg - 3, // reg - 3个值加入结果集中
+        startRR, // 从寄存器3开始
+        reg - startRR, // reg - startRR 个值加入结果集中
         0, NULL)); // not used
 
-    // 设置比较指令的跳转目标
+    // 设置比较或Seek指令的跳转目标
     cmp_op->p2 = list_size(ops);
 
-    list_append(ops, chidb_make_op(
-        Op_Next,
-        0, // 对游标0关联的表进行下一条记录的比对
-        next_to, // 跳转到开始比较的地方继续执行
-        0, NULL)); // not used
+    if (next_to != -1)
+    {
+        list_append(ops, chidb_make_op(
+            Op_Next,
+            0, // 对游标0关联的表进行下一条记录的比对
+            next_to, // 跳转到开始比较的地方继续执行
+            0, NULL)); // not used
+    }
+
+    if (after_next)
+    {
+        cmp_op->p2 = list_size(ops);
+    }
 
     // 设置表为空时的跳转目标
     rewind->p2 = list_size(ops);
@@ -430,7 +520,7 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     // 完成对结果集的定义
     int nCols = list_size(&select_names);
     // 设定结果集的列数和起始寄存器
-    stmt->startRR = 3;
+    stmt->startRR = startRR;
     stmt->nRR = nCols;
     stmt->nCols = nCols;
     stmt->cols = malloc(sizeof(char *) * nCols);
@@ -462,14 +552,14 @@ int chidb_insert_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     // 获取要插入的表的所有的列
     list_t columns;
     list_init(&columns);
-    chidb_get_columns_of_table(stmt->db->schema, table_name, columns);
+    chidb_get_columns_of_table(stmt->db->schema, table_name, &columns);
 
     // 遍历列, 检查每一列与对应的给定值类型是否匹配
     list_iterator_start(&columns);
     Literal_t *value = insert->values;
     while (list_iterator_hasnext(&columns))
     {
-        Column_t *column = (Column_t *)(list_iterator_next(&columns));
+        Column_t *column = list_iterator_next(&columns);
         // 如果给定值的个数不符
         if (value == NULL)
         {
@@ -482,6 +572,7 @@ int chidb_insert_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
             list_destroy(&columns);
             return CHIDB_EINVALIDSQL;
         }
+        value = value->next;
     }
     list_iterator_stop(&columns);
 
@@ -649,7 +740,6 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
     list_destroy(&ops);
 
     return CHIDB_OK;
-
 }
 
 int order_of_column(list_t *columns, char *name)
@@ -659,8 +749,9 @@ int order_of_column(list_t *columns, char *name)
     while (list_iterator_hasnext(columns))
     {
         Column_t *column = list_iterator_next(columns);
-        if (strcmp(name, column->name) == 0)
+        if (!strcmp(name, column->name))
         {
+            list_iterator_stop(columns);
             return i;
         }
         ++i;

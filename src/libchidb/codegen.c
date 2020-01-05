@@ -68,8 +68,6 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     Create_t *create = sql_stmt->stmt.create;
     char *text = sql_stmt->text;
 
-    text[strlen(text) - 1] = '\0'; // 删除结尾的分号
-
     // 如果要创建的表名已存在则返回错误
     if (chidb_check_table_exist(stmt->db->schema, create->table->name))
     {
@@ -93,7 +91,7 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     list_append(ops, chidb_make_op(
         Op_CreateTable,
         4, // 新建一个表, 其B树所在页码存储在寄存器4上, 因为其值需要在记录中的第5列
-        0, 0, 0)); // not used
+        0, 0, NULL)); // not used
 
     // 按Schema记录的顺序存储值
     // 存储类型
@@ -126,7 +124,7 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
         strlen(text),
         5, // 在第五列
         0, // not used
-        text)); //
+        text));
 
     // 生成一行记录
     list_append(ops, chidb_make_op(
@@ -159,7 +157,7 @@ int chidb_create_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 
 int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t *ops)
 {
-
+    return CHIDB_EINVALIDSQL;
 }
 
 // Step 3
@@ -285,6 +283,8 @@ int chidb_insert_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 
 int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
 {
+    sql_stmt->text[strlen(sql_stmt->text) - 1] = '\0'; // 删除结尾的分号
+
     // 如果之前执行了create table的指令, 则需要重新load schema
     if (stmt->db->need_refresh == 1)
     {
@@ -310,6 +310,7 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
     }
 
     list_t ops;
+    list_init(&ops);
 
     // 根据不同的语句调用不同的代码生成, 将指令添加到ops中
     int err = CHIDB_EINVALIDSQL;
@@ -332,7 +333,7 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
         break;
     }
 
-    if (err)
+    if (err != CHIDB_OK)
     {
         // 释放空间
         while (!list_empty(&ops))
@@ -358,10 +359,6 @@ int chidb_stmt_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt)
     list_iterator_stop(&ops);
 
     // 释放空间
-    while (!list_empty(&ops))
-    {
-        free(list_fetch(&ops));
-    }
     list_destroy(&ops);
 
 // --------- My Code End ---------

@@ -207,9 +207,12 @@ Project([altcode],
 int order_of_column(list_t *columns, char *name);
 
 // 如果next_to置为-1, 则无需next指令
+// *after_next置为1表示cmp_op跳转到next之后
+// *prev置为1表示需要prev指令而非next
 int chidb_cond_codegen(chidb_stmt *stmt,
     SRA_Select_t *select, chidb_dbm_op_t **cmp_op,
-    list_t *ops, int *reg, int *next_to, int *after_next)
+    list_t *ops, int *reg,
+    int *next_to, int *after_next, int *prev)
 {
     // 错误检查
     // 3. 检查要比较的值和对应的列的类型相同
@@ -265,12 +268,14 @@ int chidb_cond_codegen(chidb_stmt *stmt,
             break;
         case RA_COND_LT:
             cond_op = Op_SeekLt;
+            *prev = 1;
             break;
         case RA_COND_GT:
             cond_op = Op_SeekGt;
             break;
         case RA_COND_LEQ:
             cond_op = Op_SeekLe;
+            *prev = 1;
             break;
         case RA_COND_GEQ:
             cond_op = Op_SeekGe;
@@ -439,10 +444,11 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
 
     int next_to;
     int after_next = 0;
+    int prev = 0;
     chidb_dbm_op_t *cmp_op;
     if (select != NULL)
     {
-        int err = chidb_cond_codegen(stmt, select, &cmp_op, ops, &reg, &next_to, &after_next);
+        int err = chidb_cond_codegen(stmt, select, &cmp_op, ops, &reg, &next_to, &after_next, &prev);
         if (err)
         {
             return err;
@@ -495,7 +501,7 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     if (next_to != -1)
     {
         list_append(ops, chidb_make_op(
-            Op_Next,
+            prev ? Op_Prev : Op_Next,
             0, // 对游标0关联的表进行下一条记录的比对
             next_to, // 跳转到开始比较的地方继续执行
             0, NULL)); // not used

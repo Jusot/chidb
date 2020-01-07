@@ -123,7 +123,7 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
         chidb_Pager_setPageSize(pager, DEFAULT_PAGE_SIZE);
         pager->n_pages = 0;
 
-        // 2) 在页1中创建一个空的表页结点
+        // 2) 在页1中创建一个空的表叶结点
         npage_t npage;
         if ((status = chidb_Btree_newNode(*bt, &npage, PGTYPE_TABLE_LEAF)) != CHIDB_OK)
         {
@@ -182,7 +182,7 @@ int chidb_Btree_open(const char *filename, chidb *db, BTree **bt)
  */
 int chidb_Btree_close(BTree *bt)
 {
-    // 尝试关闭指向的页文件
+    // 尝试关闭Pager句柄关联的文件
     int status = chidb_Pager_close(bt->pager);
     if (status != CHIDB_OK)
     {
@@ -247,12 +247,17 @@ int chidb_Btree_getNodeByPage(BTree *bt, npage_t npage, BTreeNode **btn)
     node->free_offset = get2byte(data + 1);
     // 字节3-4为此页面中存储的单元格数
     node->n_cells = get2byte(data + 3);
-    // 字节5-5为单元格开始处的字节偏移量
+    // 字节5-6为单元格开始处的字节偏移量
     node->cells_offset = get2byte(data + 5);
     // 当页面类型为内部表页面或者内部索引页面时, 该值才有意义
-    node->right_page = ((node->type == 0x05) || (node->type == 0x02)) ? get4byte(data + 8) : 0;
+    node->right_page =
+        ((node->type == PGTYPE_TABLE_INTERNAL) || (node->type == PGTYPE_INDEX_INTERNAL))
+        ? get4byte(data + 8) : 0;
     // 单元格偏移数组存储在页面头之后的位置
-    node->celloffset_array = data + (((node->type == 0x05) || (node->type == 0x02)) ? 12 : 8);
+    node->celloffset_array =
+        data +
+        (((node->type == PGTYPE_TABLE_INTERNAL) || (node->type == PGTYPE_INDEX_INTERNAL))
+        ? 12 : 8);
 
     return CHIDB_OK;
 }
@@ -726,7 +731,7 @@ int chidb_Btree_find(BTree *bt, npage_t nroot, chidb_key_t key, uint8_t **data, 
             }
             return CHIDB_OK;
         }
-        // 若Cell中的键小于或等于给定key, 因为页中cell是有序的, 所以第一个大于或等于给定key的结点一定是包含所找Cell的页码的Cell
+        // 若Cell中的键大于或等于给定key, 因为页中cell是有序的, 所以第一个大于或等于给定key的结点一定是包含所找Cell的页码的Cell
         else if (cell.key >= key)
         {
             // 保存btn的类型

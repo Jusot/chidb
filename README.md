@@ -69,4 +69,4 @@ make check
 
 ### Assignment 4
 
-+ [ ] src/libchidb/optimizer.c
++ [x] src/libchidb/optimizer.c

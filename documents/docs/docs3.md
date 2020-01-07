@@ -2,19 +2,69 @@
 
 ## 代码生成
 
-### 步骤
+完成以下功能:
 
-#### 第一步: Schema Loading
+1. 实现读取 Schema 表
+2. 实现简单 Select 语句到 DBM 指令的代码生成
+3. 实现简单 Insert 语句到 DBM 指令的代码生成
+4. 实现 Create Table 语句到 DBM 指令的代码生成
 
-#### 第二步: 简单 Select 语句的代码生成
+### 例子
 
-#### 第三步: 简单 Insert 语句的代码生成
+```sql
+CREATE TABLE products(code INTEGER PRIMARY KEY, name TEXT, price INTEGER);
+```
 
-#### 第四步: Create Table 语句的代码生成
+翻译为
 
-### 修改的结构和函数
+```plain
+Integer      1  0  _  _
+OpenWrite    0  0  5  _
 
-+ [x] src/libchidb/chidbInt.h
-+ [x] src/libchidb/api.c
-+ [x] src/libchidb/utils.\[hc\]
-+ [x] src/libchidb/codegen.c
+CreateTable  4  _  _  _
+
+String       5  1  _  "table"
+String       8  2  _  "products"
+String       8  3  _  "products"
+String       73 5  _  "CREATE TABLE products(code INTEGER PRIMARY KEY, name TEXT, price INTEGER)"
+
+MakeRecord   1  5  6  _
+Integer      1  7  _  _
+
+Insert       0  6  7  _
+
+Close        0  _  _  _
+```
+
+### 数据流图
+
+SQL 语句 -> 词法分析器 -> 语法分析器 -> 代码生成模块 -> DBM 指令
+
+其中词法分析器和语法分析器由 chidb 提供
+
+### 具体实现
+
+#### 1. 读取 Schema 表
+
+##### 定义 Schema 类型
+
+在 chidbInt.h 中定义 chidb_schema_item_t 类型, 结构定义如下
+
+```c
+typedef struct
+{
+    char *type;
+    char *name;
+    char *assoc;
+    int root_page;
+    chisql_statement_t *stmt;
+} chidb_schema_item_t;
+```
+
+其包含了 Schema 表中每一行的记录信息
+
+#### 2. 简单 Select 语句的代码生成
+
+#### 3. 简单 Insert 语句的代码生成
+
+#### 4. Create Table 语句的代码生成

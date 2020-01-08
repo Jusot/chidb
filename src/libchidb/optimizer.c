@@ -63,20 +63,20 @@ int chidb_stmt_optimize(chidb *db, chisql_statement_t *sql_stmt, chisql_statemen
     /* 可优化时, SRA形如
     Project([*],
         Select(t.a > int 10,
-                NaturalJoin(
-                        Table(t),
-                        Table(u)
-                )
+            NaturalJoin(
+                Table(t),
+                Table(u)
+            )
         )
     )
     ->
     Project([*],
-            NaturalJoin(
-                    Select(t.a > int 10,
-                            Table(t)
-                    ),
-                    Table(u)
-            )
+        NaturalJoin(
+            Select(t.a > int 10,
+                Table(t)
+            ),
+            Table(u)
+        )
     )
     */
     SRA_Project_t *project = &sql_stmt->stmt.select->project;

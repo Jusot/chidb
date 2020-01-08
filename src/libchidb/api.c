@@ -125,7 +125,7 @@ int chidb_open(const char *file, chidb **db)
         return CHIDB_ENOMEM;
     chidb_Btree_open(file, *db, &(*db)->bt);
 
-	// 初始化schemas
+	// 初始化schema
 	list_init(&(*db)->schema);
 	// 初始化need_refresh
 	(*db)->need_refresh = 0;

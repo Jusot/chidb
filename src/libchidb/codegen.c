@@ -201,7 +201,6 @@ Project([altcode],
                 Table(numbers)
         )
 */
-// from -> where -> select
 
 // 获取列在表中所有列的位置, 从0开始
 int order_of_column(list_t *columns, char *name);

@@ -25,6 +25,16 @@ make
 make check
 ```
 
+### Quick Usage
+
+```
+./chidb
+chidb> .open test.cdb
+chidb> CREATE TABLE products(code INTEGER PRIMARY KEY, name TEXT, price INTEGER);
+chidb> INSERT INTO products VALUES(1, "Hard Drive", 240);
+chidb> SELECT * FROM products;
+```
+
 ## Need to Complete
 
 ### Assignment 1

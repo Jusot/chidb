@@ -445,7 +445,7 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
     int next_to;
     int after_next = 0;
     int prev = 0;
-    chidb_dbm_op_t *cmp_op;
+    chidb_dbm_op_t *cmp_op = NULL;
     if (select != NULL)
     {
         int err = chidb_cond_codegen(stmt, select, &cmp_op, ops, &reg, &next_to, &after_next, &prev);
@@ -496,8 +496,12 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
         0, NULL)); // not used
 
     // 设置比较或Seek指令的跳转目标
-    cmp_op->p2 = list_size(ops);
+    if (cmp_op != NULL)
+    {
+        cmp_op->p2 = list_size(ops);
+    }
 
+    // next_to = -1 时, 不需要prev或next指令
     if (next_to != -1)
     {
         list_append(ops, chidb_make_op(
@@ -507,6 +511,7 @@ int chidb_select_codegen(chidb_stmt *stmt, chisql_statement_t *sql_stmt, list_t 
             0, NULL)); // not used
     }
 
+    // after_next为1时, 比较指令的跳转目标在next或prev之后
     if (after_next)
     {
         cmp_op->p2 = list_size(ops);
